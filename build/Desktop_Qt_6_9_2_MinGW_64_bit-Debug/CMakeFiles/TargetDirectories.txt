@@ -1,0 +1,5 @@
+C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/SCV_Project.dir
+C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/edit_cache.dir
+C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/rebuild_cache.dir
+C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/SCV_Project_autogen_timestamp_deps.dir
+C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/SCV_Project_autogen.dir

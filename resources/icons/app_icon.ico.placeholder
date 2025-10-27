@@ -1,0 +1,11 @@
+This is a placeholder for app_icon.ico
+
+To add your Windows ICO icon:
+1. Create or obtain a .ico file with multiple sizes (16x16, 32x32, 48x48, 256x256)
+2. Use an online converter like https://www.icoconverter.com/
+3. Save it as "app_icon.ico" in this directory
+4. Delete this placeholder file
+5. Rebuild the project
+
+For now, the SVG icon (app_icon.svg) will be used.
+

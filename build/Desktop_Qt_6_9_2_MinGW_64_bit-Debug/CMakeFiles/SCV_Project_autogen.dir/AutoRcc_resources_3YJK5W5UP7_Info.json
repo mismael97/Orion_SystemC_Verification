@@ -1,0 +1,22 @@
+{
+	"BUILD_DIR" : "C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/SCV_Project_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Users/HKhaled/Downloads/SCV_Project",
+	"CMAKE_SOURCE_DIR" : "C:/Users/HKhaled/Downloads/SCV_Project",
+	"CROSS_CONFIG" : false,
+	"GENERATOR" : "Ninja",
+	"INCLUDE_DIR" : "C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/SCV_Project_autogen/include",
+	"INPUTS" : [ "C:/Users/HKhaled/Downloads/SCV_Project/resources/icons/app_icon.svg" ],
+	"LOCK_FILE" : "C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/SCV_Project_autogen.dir/AutoRcc_resources_3YJK5W5UP7_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "--no-zstd", "-name", "resources" ],
+	"OUTPUT_CHECKSUM" : "3YJK5W5UP7",
+	"OUTPUT_NAME" : "qrc_resources.cpp",
+	"RCC_EXECUTABLE" : "C:/Qt/6.9.2/mingw_64/bin/rcc.exe",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "C:/Users/HKhaled/Downloads/SCV_Project/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/SCV_Project_autogen.dir/AutoRcc_resources_3YJK5W5UP7_Used.txt",
+	"SOURCE" : "C:/Users/HKhaled/Downloads/SCV_Project/resources/resources.qrc",
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

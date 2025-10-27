@@ -1,0 +1,11 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource>
+        <!-- Application Icon - Replace with your own -->
+        <file>icons/app_icon.svg</file>
+        <!-- Uncomment these when you add PNG and ICO versions -->
+        <!-- <file>icons/app_icon.png</file> -->
+        <!-- <file>icons/app_icon.ico</file> -->
+    </qresource>
+</RCC>
+

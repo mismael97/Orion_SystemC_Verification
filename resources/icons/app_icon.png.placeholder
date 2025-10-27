@@ -1,0 +1,10 @@
+This is a placeholder for app_icon.png
+
+To add your PNG icon:
+1. Create or obtain a PNG image (256x256 pixels recommended)
+2. Save it as "app_icon.png" in this directory
+3. Delete this placeholder file
+4. Rebuild the project
+
+For now, the SVG icon (app_icon.svg) will be used.
+

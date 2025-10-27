@@ -1,0 +1,1558 @@
+// PersistenceManager.cpp
+#include "utils/PersistenceManager.h"
+#include "graphics/ReadyComponentGraphicsItem.h"
+#include "graphics/ModuleGraphicsItem.h"
+#include "graphics/wire/WireGraphicsItem.h"
+#include "graphics/TextGraphicsItem.h"
+#include "parsers/SvParser.h"
+#include <QFile>
+#include <QDir>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QTextStream>
+#include <QDebug>
+#include <QGraphicsScene>
+#include <QRegularExpression>
+
+PersistenceManager& PersistenceManager::instance()
+{
+    static PersistenceManager inst;
+    return inst;
+}
+
+void PersistenceManager::setWorkingDirectory(const QString& directory)
+{
+    m_workingDirectory = directory;
+    m_componentCounter = 0;
+    m_componentIdMap.clear();
+    m_idToComponentMap.clear();
+    m_rtlModuleNameMap.clear();
+    m_nameToRTLModuleMap.clear();
+    
+    // Don't automatically initialize schematic.json - let it be created on first save
+    // This prevents overwriting existing data when reopening directories
+    
+    // Check if schematic.json exists and log status
+    QString schematicPath = QDir(m_workingDirectory).filePath("schematic.json");
+    if (QFile::exists(schematicPath)) {
+        qDebug() << "📂 Working directory set to:" << directory << "| schematic.json exists";
+    } else {
+        qDebug() << "📂 Working directory set to:" << directory << "| schematic.json will be created on first save";
+    }
+}
+
+QString PersistenceManager::generateComponentId(const QString& componentType)
+{
+    return QString("%1_%2").arg(componentType).arg(++m_componentCounter);
+}
+
+QString PersistenceManager::createComponentId(const QString& componentType)
+{
+    return generateComponentId(componentType);
+}
+
+
+
+QString PersistenceManager::getSystemCContent(const QString& componentType, const QString& componentId)
+{
+    QString content;
+    QTextStream stream(&content);
+    
+    stream << "// SystemC file for " << componentType << "\n";
+    stream << "// Component ID: " << componentId << "\n\n";
+    stream << "#include <systemc.h>\n\n";
+    stream << "SC_MODULE(" << componentId << ") {\n";
+    stream << "    // Ports\n";
+    
+    // Add ports based on component type
+    if (componentType == "Transactor") {
+        stream << "    sc_in<bool> clk;\n";
+        stream << "    sc_in<bool> reset;\n";
+        stream << "    sc_out<sc_uint<32>> data_out1;\n";
+        stream << "    sc_out<sc_uint<32>> data_out2;\n";
+        stream << "    sc_out<sc_uint<32>> data_out3;\n";
+    } else if (componentType == "RM") {
+        stream << "    sc_in<sc_uint<32>> data_in;\n";
+        stream << "    sc_out<sc_uint<32>> data_out;\n";
+    } else if (componentType == "Compare") {
+        stream << "    sc_in<sc_uint<32>> data_in1;\n";
+        stream << "    sc_in<sc_uint<32>> data_in2;\n";
+    } else if (componentType == "Driver") {
+        stream << "    sc_in<sc_uint<32>> data_in;\n";
+        stream << "    sc_out<bool> valid;\n";
+        stream << "    sc_out<sc_uint<32>> data_out;\n";
+    } else if (componentType == "Stimuler") {
+        stream << "    sc_in<bool> clk;\n";
+        stream << "    sc_out<sc_uint<32>> data_out;\n";
+    } else if (componentType == "Stimuli") {
+        stream << "    sc_out<sc_uint<32>> data_out;\n";
+    } else if (componentType == "RTL") {
+        stream << "    // RTL Component - SystemC wrapper for RTL modules\n";
+        stream << "    sc_in<sc_uint<32>> data_in;   // Input port (left side)\n";
+        stream << "    sc_out<sc_uint<32>> data_out;  // Output port (left side)\n";
+        stream << "    // Add more ports as needed after connecting RTL file\n";
+    }
+    
+    stream << "\n    SC_CTOR(" << componentId << ") {\n";
+    stream << "        // Constructor\n";
+    stream << "    }\n";
+    stream << "\n    void process() {\n";
+    stream << "        // Process logic\n";
+    stream << "    }\n";
+    stream << "};\n";
+    
+    return content;
+}
+
+QString PersistenceManager::getSystemCContentFromModuleInfo(const ModuleInfo& moduleInfo, const QString& componentId)
+{
+    QString content;
+    QTextStream stream(&content);
+    
+    stream << "// SystemC file for RTL module: " << moduleInfo.name << "\n";
+    stream << "// Component ID: " << componentId << "\n";
+    stream << "// Auto-generated from SystemVerilog module\n\n";
+    stream << "#include <systemc.h>\n\n";
+    stream << "SC_MODULE(" << componentId << ") {\n";
+    stream << "    // Ports from RTL module\n";
+    
+    // Generate input ports
+    if (!moduleInfo.inputs.isEmpty()) {
+        stream << "\n    // Input ports\n";
+        for (const Port& port : moduleInfo.inputs) {
+            QString portType = getSystemCPortType(port);
+            stream << "    sc_in<" << portType << "> " << port.name << ";";
+            if (!port.width.isEmpty()) {
+                stream << "  // " << port.width;
+            }
+            stream << "\n";
+        }
+    }
+    
+    // Generate output ports
+    if (!moduleInfo.outputs.isEmpty()) {
+        stream << "\n    // Output ports\n";
+        for (const Port& port : moduleInfo.outputs) {
+            QString portType = getSystemCPortType(port);
+            stream << "    sc_out<" << portType << "> " << port.name << ";";
+            if (!port.width.isEmpty()) {
+                stream << "  // " << port.width;
+            }
+            stream << "\n";
+        }
+    }
+    
+    stream << "\n    SC_CTOR(" << componentId << ") {\n";
+    stream << "        // Constructor\n";
+    stream << "        // Initialize RTL module wrapper\n";
+    stream << "    }\n";
+    stream << "\n    void process() {\n";
+    stream << "        // Process logic for " << moduleInfo.name << "\n";
+    stream << "        // Implement RTL behavior here\n";
+    stream << "    }\n";
+    stream << "};\n";
+    
+    return content;
+}
+
+QString PersistenceManager::getSystemCPortType(const Port& port)
+{
+    // Parse width from format "[MSB:LSB]"
+    if (port.width.isEmpty()) {
+        return "bool";  // Single bit
+    }
+    
+    // Extract MSB from width string like "[7:0]"
+    QRegularExpression re(R"(\[(\d+):(\d+)\])");
+    QRegularExpressionMatch match = re.match(port.width);
+    
+    if (match.hasMatch()) {
+        int msb = match.captured(1).toInt();
+        int lsb = match.captured(2).toInt();
+        int width = msb - lsb + 1;
+        
+        if (width == 1) {
+            return "bool";
+        } else if (width <= 8) {
+            return "sc_uint<" + QString::number(width) + ">";
+        } else if (width <= 16) {
+            return "sc_uint<" + QString::number(width) + ">";
+        } else if (width <= 32) {
+            return "sc_uint<" + QString::number(width) + ">";
+        } else if (width <= 64) {
+            return "sc_uint<" + QString::number(width) + ">";
+        } else {
+            return "sc_biguint<" + QString::number(width) + ">";
+        }
+    }
+    
+    // Default fallback
+    return "sc_uint<32>";
+}
+
+QString PersistenceManager::createComponentFile(const QString& componentType, const QPointF& position, const QSizeF& size)
+{
+    if (m_workingDirectory.isEmpty()) {
+        qWarning() << "No working directory set";
+        return QString();
+    }
+    
+    QString componentId = generateComponentId(componentType);
+    QString fileName = componentId + ".cpp";
+    QString filePath = QDir(m_workingDirectory).filePath(fileName);
+    
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qWarning() << "Failed to create component file:" << filePath;
+        return QString();
+    }
+    
+    QTextStream out(&file);
+    out << getSystemCContent(componentType, componentId);
+    
+    // Also save metadata in a JSON file
+    QString metaFileName = componentId + ".meta.json";
+    QString metaFilePath = QDir(m_workingDirectory).filePath(metaFileName);
+    
+    QJsonObject metaData;
+    metaData["id"] = componentId;
+    metaData["type"] = componentType;
+    metaData["position"] = QJsonObject{{"x", position.x()}, {"y", position.y()}};
+    metaData["size"] = QJsonObject{{"width", size.width()}, {"height", size.height()}};
+    metaData["color"] = "";  // Will be set when user changes color
+    
+    QFile metaFile(metaFilePath);
+    if (metaFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QJsonDocument doc(metaData);
+        metaFile.write(doc.toJson());
+        metaFile.close();
+    }
+    
+    // ALSO save to connections.json as a backup
+    saveReadyComponentToConnections(componentId, componentType, position, size);
+    
+    qDebug() << "Created component file:" << filePath;
+    return componentId;
+}
+
+QString PersistenceManager::createRTLModuleFile(const ModuleInfo& moduleInfo, const QString& filePath, const QPointF& position, const QSizeF& size)
+{
+    if (m_workingDirectory.isEmpty()) {
+        qWarning() << "No working directory set";
+        return QString();
+    }
+    
+    // Generate a component ID based on the module name
+    QString componentId = generateComponentId(moduleInfo.name);
+    QString fileName = componentId + ".cpp";
+    QString cppFilePath = QDir(m_workingDirectory).filePath(fileName);
+    
+    QFile file(cppFilePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qWarning() << "Failed to create RTL module file:" << cppFilePath;
+        return QString();
+    }
+    
+    QTextStream out(&file);
+    out << getSystemCContentFromModuleInfo(moduleInfo, componentId);
+    file.close();
+    
+    // Also save metadata in a JSON file
+    QString metaFileName = componentId + ".meta.json";
+    QString metaFilePath = QDir(m_workingDirectory).filePath(metaFileName);
+    
+    QJsonObject metaData;
+    metaData["id"] = componentId;
+    metaData["type"] = "RTLModule";
+    metaData["moduleName"] = moduleInfo.name;
+    metaData["sourceFilePath"] = filePath;
+    metaData["position"] = QJsonObject{{"x", position.x()}, {"y", position.y()}};
+    metaData["size"] = QJsonObject{{"width", size.width()}, {"height", size.height()}};
+    metaData["color"] = "";
+    
+    // Store port information
+    QJsonArray inputPorts;
+    for (const Port& port : moduleInfo.inputs) {
+        QJsonObject portObj;
+        portObj["name"] = port.name;
+        portObj["width"] = port.width;
+        inputPorts.append(portObj);
+    }
+    metaData["inputPorts"] = inputPorts;
+    
+    QJsonArray outputPorts;
+    for (const Port& port : moduleInfo.outputs) {
+        QJsonObject portObj;
+        portObj["name"] = port.name;
+        portObj["width"] = port.width;
+        outputPorts.append(portObj);
+    }
+    metaData["outputPorts"] = outputPorts;
+    
+    QFile metaFile(metaFilePath);
+    if (metaFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QJsonDocument doc(metaData);
+        metaFile.write(doc.toJson());
+        metaFile.close();
+    }
+    
+    // Save RTL module placement
+    saveRTLModulePlacement(moduleInfo.name, filePath, position);
+    
+    qDebug() << "Created RTL module file:" << cppFilePath << "for module:" << moduleInfo.name;
+    qDebug() << "  Inputs:" << moduleInfo.inputs.size() << "Outputs:" << moduleInfo.outputs.size();
+    
+    return componentId;
+}
+
+void PersistenceManager::saveReadyComponentToConnections(const QString& componentId, const QString& type, 
+                                                         const QPointF& position, const QSizeF& size)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return;
+    }
+    
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray components = json["components"].toArray();
+    
+    // Check if component already exists
+    bool exists = false;
+    for (int i = 0; i < components.size(); ++i) {
+        QJsonObject comp = components[i].toObject();
+        if (comp["id"].toString() == componentId) {
+            // Update existing component
+            comp["type"] = type;
+            comp["position"] = QJsonObject{{"x", position.x()}, {"y", position.y()}};
+            comp["size"] = QJsonObject{{"width", size.width()}, {"height", size.height()}};
+            components[i] = comp;
+            exists = true;
+            break;
+        }
+    }
+    
+    // Add new component if it doesn't exist
+    if (!exists) {
+        QJsonObject componentData;
+        componentData["id"] = componentId;
+        componentData["type"] = type;
+        componentData["position"] = QJsonObject{{"x", position.x()}, {"y", position.y()}};
+        componentData["size"] = QJsonObject{{"width", size.width()}, {"height", size.height()}};
+        components.append(componentData);
+    }
+    
+    json["components"] = components;
+    saveConnectionsJson(json);
+    
+    qDebug() << "Saved ready component to connections.json:" << componentId;
+}
+
+bool PersistenceManager::loadComponentsFromDirectory(QGraphicsScene* scene)
+{
+    if (m_workingDirectory.isEmpty() || !scene) {
+        return false;
+    }
+    
+    QDir dir(m_workingDirectory);
+    QStringList metaFiles = dir.entryList(QStringList() << "*.meta.json", QDir::Files);
+    
+    for (const QString& metaFile : metaFiles) {
+        QString metaFilePath = dir.filePath(metaFile);
+        QFile file(metaFilePath);
+        
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            continue;
+        }
+        
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        file.close();
+        
+        if (!doc.isObject()) {
+            continue;
+        }
+        
+        QJsonObject obj = doc.object();
+        QString id = obj["id"].toString();
+        QString type = obj["type"].toString();
+        QJsonObject posObj = obj["position"].toObject();
+        QJsonObject sizeObj = obj["size"].toObject();
+        
+        QPointF position(posObj["x"].toDouble(), posObj["y"].toDouble());
+        QSizeF size(sizeObj["width"].toDouble(), sizeObj["height"].toDouble());
+        
+        // Normalize type name (RTLComponent -> RTL for backward compatibility)
+        QString normalizedType = type;
+        if (type == "RTLComponent") {
+            normalizedType = "RTL";
+        }
+        
+        // Create the component
+        ReadyComponentGraphicsItem* component = new ReadyComponentGraphicsItem(normalizedType);
+        component->setPos(position);
+        component->setSize(size.width(), size.height());
+        
+        // Restore custom color if set
+        QString colorStr = obj["color"].toString();
+        if (!colorStr.isEmpty() && QColor::isValidColorName(colorStr)) {
+            component->setCustomColor(QColor(colorStr));
+        }
+        
+        scene->addItem(component);
+        
+        // Register the component
+        m_componentIdMap[component] = id;
+        m_idToComponentMap[id] = component;
+        
+        // Update counter to avoid ID collisions
+        QString numberStr = id.mid(id.lastIndexOf('_') + 1);
+        int number = numberStr.toInt();
+        if (number > m_componentCounter) {
+            m_componentCounter = number;
+        }
+        
+        qDebug() << "Loaded component:" << type << "at" << position;
+    }
+    
+    return true;
+}
+
+void PersistenceManager::updateComponentPosition(const QString& componentId, const QPointF& position)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return;
+    }
+    
+    QString metaFileName = componentId + ".meta.json";
+    QString metaFilePath = QDir(m_workingDirectory).filePath(metaFileName);
+    
+    QFile file(metaFilePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        // If meta file doesn't exist, this might be an RTL component
+        // Try to update in connections.json instead
+        updateRTLComponentInConnections(componentId, position);
+        return;
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    
+    if (!doc.isObject()) {
+        return;
+    }
+    
+    QJsonObject obj = doc.object();
+    obj["position"] = QJsonObject{{"x", position.x()}, {"y", position.y()}};
+    
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QJsonDocument newDoc(obj);
+        file.write(newDoc.toJson());
+        file.close();
+    }
+}
+
+void PersistenceManager::updateComponentSize(const QString& componentId, const QSizeF& size)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return;
+    }
+    
+    // Update .meta.json if it exists
+    QString metaFileName = componentId + ".meta.json";
+    QString metaFilePath = QDir(m_workingDirectory).filePath(metaFileName);
+    
+    QFile file(metaFilePath);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        file.close();
+        
+        if (doc.isObject()) {
+            QJsonObject obj = doc.object();
+            obj["size"] = QJsonObject{{"width", size.width()}, {"height", size.height()}};
+            
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QJsonDocument newDoc(obj);
+                file.write(newDoc.toJson());
+                file.close();
+            }
+        }
+    }
+    
+    // Also update in connections.json
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray components = json["components"].toArray();
+    
+    for (int i = 0; i < components.size(); ++i) {
+        QJsonObject comp = components[i].toObject();
+        if (comp["id"].toString() == componentId) {
+            comp["size"] = QJsonObject{{"width", size.width()}, {"height", size.height()}};
+            components[i] = comp;
+            json["components"] = components;
+            saveConnectionsJson(json);
+            qDebug() << "Updated component size for" << componentId;
+            return;
+        }
+    }
+}
+
+void PersistenceManager::updateRTLComponentInConnections(const QString& componentId, const QPointF& position)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return;
+    }
+    
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray components = json["components"].toArray();
+    
+    // Find and update the RTL component
+    for (int i = 0; i < components.size(); ++i) {
+        QJsonObject comp = components[i].toObject();
+        if (comp["id"].toString() == componentId) {
+            comp["position"] = QJsonObject{{"x", position.x()}, {"y", position.y()}};
+            components[i] = comp;
+            json["components"] = components;
+            saveConnectionsJson(json);
+            qDebug() << "Updated RTL component position for" << componentId;
+            return;
+        }
+    }
+}
+
+void PersistenceManager::deleteComponentFile(const QString& componentId)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return;
+    }
+    
+    QDir dir(m_workingDirectory);
+    
+    // Delete the .cpp file
+    QString cppFile = componentId + ".cpp";
+    dir.remove(cppFile);
+    
+    // Delete the .meta.json file
+    QString metaFile = componentId + ".meta.json";
+    dir.remove(metaFile);
+    
+    qDebug() << "Deleted component files for:" << componentId;
+}
+
+QString PersistenceManager::getComponentId(ReadyComponentGraphicsItem* component) const
+{
+    return m_componentIdMap.value(component, QString());
+}
+
+void PersistenceManager::setComponentId(ReadyComponentGraphicsItem* component, const QString& id)
+{
+    m_componentIdMap[component] = id;
+    m_idToComponentMap[id] = component;
+}
+
+void PersistenceManager::updateComponentColor(const QString& componentId, const QColor& color)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return;
+    }
+    
+    QString metaFileName = componentId + ".meta.json";
+    QString metaFilePath = QDir(m_workingDirectory).filePath(metaFileName);
+    
+    QFile file(metaFilePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return;
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    
+    if (!doc.isObject()) {
+        return;
+    }
+    
+    QJsonObject obj = doc.object();
+    obj["color"] = color.name(QColor::HexArgb);  // Save with alpha
+    
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QJsonDocument newDoc(obj);
+        file.write(newDoc.toJson());
+        file.close();
+        qDebug() << "Saved color for" << componentId << ":" << color.name();
+    }
+}
+
+QColor PersistenceManager::getComponentColor(const QString& componentId)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return QColor();
+    }
+    
+    QString metaFileName = componentId + ".meta.json";
+    QString metaFilePath = QDir(m_workingDirectory).filePath(metaFileName);
+    
+    QFile file(metaFilePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QColor();
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    
+    if (!doc.isObject()) {
+        return QColor();
+    }
+    
+    QJsonObject obj = doc.object();
+    QString colorStr = obj["color"].toString();
+    
+    if (!colorStr.isEmpty() && QColor::isValidColorName(colorStr)) {
+        return QColor(colorStr);
+    }
+    
+    return QColor();
+}
+
+QString PersistenceManager::getRTLModuleName(ModuleGraphicsItem* module) const
+{
+    return m_rtlModuleNameMap.value(module, QString());
+}
+
+void PersistenceManager::setRTLModuleName(ModuleGraphicsItem* module, const QString& name)
+{
+    m_rtlModuleNameMap[module] = name;
+    m_nameToRTLModuleMap[name] = module;
+}
+
+QString PersistenceManager::getRTLModuleFilePath(const QString& moduleName)
+{
+    QJsonObject json = loadRTLPlacementsJson();
+    QJsonArray placements = json["placements"].toArray();
+    
+    for (const QJsonValue& value : placements) {
+        QJsonObject placement = value.toObject();
+        if (placement["moduleName"].toString() == moduleName) {
+            return placement["filePath"].toString();
+        }
+    }
+    
+    return QString();
+}
+
+QJsonObject PersistenceManager::loadConnectionsJson()
+{
+    if (m_workingDirectory.isEmpty()) {
+        return QJsonObject();
+    }
+    
+    QString connectionsPath = QDir(m_workingDirectory).filePath("connections.json");
+    QFile file(connectionsPath);
+    
+    if (!file.exists()) {
+        return QJsonObject();
+    }
+    
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QJsonObject();
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    
+    return doc.object();
+}
+
+void PersistenceManager::saveConnectionsJson(const QJsonObject& json)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return;
+    }
+    
+    QString connectionsPath = QDir(m_workingDirectory).filePath("connections.json");
+    QFile file(connectionsPath);
+    
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qWarning() << "Failed to save connections.json";
+        return;
+    }
+    
+    QJsonDocument doc(json);
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+    
+    qDebug() << "Saved connections.json";
+}
+
+void PersistenceManager::saveConnection(const QString& sourceId, const QPointF& sourcePort,
+                                       const QString& targetId, const QPointF& targetPort,
+                                       bool sourceIsRTL, bool targetIsRTL,
+                                       const QList<QPointF>& controlPoints)
+{
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray connections = json["connections"].toArray();
+    
+    QJsonObject connection;
+    connection["sourceId"] = sourceId;
+    connection["sourcePort"] = QJsonObject{{"x", sourcePort.x()}, {"y", sourcePort.y()}};
+    connection["targetId"] = targetId;
+    connection["targetPort"] = QJsonObject{{"x", targetPort.x()}, {"y", targetPort.y()}};
+    connection["sourceIsRTL"] = sourceIsRTL;
+    connection["targetIsRTL"] = targetIsRTL;
+    
+    // Save control points
+    QJsonArray controlPointsArray;
+    for (const QPointF& point : controlPoints) {
+        controlPointsArray.append(QJsonObject{{"x", point.x()}, {"y", point.y()}});
+    }
+    connection["controlPoints"] = controlPointsArray;
+    
+    connections.append(connection);
+    json["connections"] = connections;
+    
+    saveConnectionsJson(json);
+}
+
+void PersistenceManager::removeConnection(const QString& sourceId, const QPointF& sourcePort,
+                                         const QString& targetId, const QPointF& targetPort)
+{
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray connections = json["connections"].toArray();
+    QJsonArray newConnections;
+    
+    for (int i = 0; i < connections.size(); ++i) {
+        QJsonObject conn = connections[i].toObject();
+        QString src = conn["sourceId"].toString();
+        QString tgt = conn["targetId"].toString();
+        QJsonObject srcPort = conn["sourcePort"].toObject();
+        QJsonObject tgtPort = conn["targetPort"].toObject();
+        
+        QPointF srcPos(srcPort["x"].toDouble(), srcPort["y"].toDouble());
+        QPointF tgtPos(tgtPort["x"].toDouble(), tgtPort["y"].toDouble());
+        
+        // Keep connection if it doesn't match
+        if (src != sourceId || tgt != targetId ||
+            qAbs(srcPos.x() - sourcePort.x()) > 1 || qAbs(srcPos.y() - sourcePort.y()) > 1 ||
+            qAbs(tgtPos.x() - targetPort.x()) > 1 || qAbs(tgtPos.y() - targetPort.y()) > 1) {
+            newConnections.append(conn);
+        }
+    }
+    
+    json["connections"] = newConnections;
+    saveConnectionsJson(json);
+}
+
+QList<ConnectionData> PersistenceManager::parseConnections(const QJsonObject& json)
+{
+    QList<ConnectionData> result;
+    QJsonArray connections = json["connections"].toArray();
+    
+    for (int i = 0; i < connections.size(); ++i) {
+        QJsonObject conn = connections[i].toObject();
+        
+        ConnectionData data;
+        data.sourceId = conn["sourceId"].toString();
+        data.targetId = conn["targetId"].toString();
+        
+        QJsonObject srcPort = conn["sourcePort"].toObject();
+        QJsonObject tgtPort = conn["targetPort"].toObject();
+        
+        data.sourcePort = QPointF(srcPort["x"].toDouble(), srcPort["y"].toDouble());
+        data.targetPort = QPointF(tgtPort["x"].toDouble(), tgtPort["y"].toDouble());
+        data.sourceIsRTL = conn["sourceIsRTL"].toBool(false);
+        data.targetIsRTL = conn["targetIsRTL"].toBool(false);
+        
+        // Parse control points
+        QJsonArray controlPointsArray = conn["controlPoints"].toArray();
+        for (int j = 0; j < controlPointsArray.size(); ++j) {
+            QJsonObject cpObj = controlPointsArray[j].toObject();
+            QPointF cp(cpObj["x"].toDouble(), cpObj["y"].toDouble());
+            data.controlPoints.append(cp);
+        }
+        
+        // Parse orthogonal offset
+        data.orthogonalOffset = conn["orthogonalOffset"].toDouble(0.0);
+        
+        result.append(data);
+    }
+    
+    return result;
+}
+
+bool PersistenceManager::loadConnections(QGraphicsScene* scene)
+{
+    if (m_workingDirectory.isEmpty() || !scene) {
+        return false;
+    }
+    
+    QJsonObject json = loadConnectionsJson();
+    QList<ConnectionData> connections = parseConnections(json);
+    
+    for (const ConnectionData& conn : connections) {
+        ReadyComponentGraphicsItem* source = nullptr;
+        ReadyComponentGraphicsItem* target = nullptr;
+        
+        // Get source (either ready component or RTL module)
+        if (conn.sourceIsRTL) {
+            ModuleGraphicsItem* rtlSource = m_nameToRTLModuleMap.value(conn.sourceId, nullptr);
+            source = rtlSource; // ModuleGraphicsItem inherits from ReadyComponentGraphicsItem
+        } else {
+            source = m_idToComponentMap.value(conn.sourceId, nullptr);
+        }
+        
+        // Get target (either ready component or RTL module)
+        if (conn.targetIsRTL) {
+            ModuleGraphicsItem* rtlTarget = m_nameToRTLModuleMap.value(conn.targetId, nullptr);
+            target = rtlTarget; // ModuleGraphicsItem inherits from ReadyComponentGraphicsItem
+        } else {
+            target = m_idToComponentMap.value(conn.targetId, nullptr);
+        }
+        
+        if (source && target) {
+            WireGraphicsItem* wire = new WireGraphicsItem(source, conn.sourcePort, target, conn.targetPort);
+            
+            // Restore control points
+            if (!conn.controlPoints.isEmpty()) {
+                wire->setControlPoints(conn.controlPoints);
+            }
+            
+            // Restore orthogonal offset
+            if (conn.orthogonalOffset != 0.0) {
+                wire->setOrthogonalOffset(conn.orthogonalOffset);
+            }
+            
+            scene->addItem(wire);
+            source->addWire(wire);
+            target->addWire(wire);
+            
+            qDebug() << "Restored connection:" << conn.sourceId << "->" << conn.targetId 
+                     << "with" << conn.controlPoints.size() << "control points"
+                     << "offset:" << conn.orthogonalOffset;
+        }
+    }
+    
+    return true;
+}
+
+void PersistenceManager::updateConnectionControlPoints(const QString& sourceId, const QPointF& sourcePort,
+                                                       const QString& targetId, const QPointF& targetPort,
+                                                       const QList<QPointF>& controlPoints)
+{
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray connections = json["connections"].toArray();
+    
+    // Find and update the connection
+    for (int i = 0; i < connections.size(); ++i) {
+        QJsonObject conn = connections[i].toObject();
+        QString src = conn["sourceId"].toString();
+        QString tgt = conn["targetId"].toString();
+        
+        if (src == sourceId && tgt == targetId) {
+            QJsonObject srcPort = conn["sourcePort"].toObject();
+            QJsonObject tgtPort = conn["targetPort"].toObject();
+            
+            QPointF srcPos(srcPort["x"].toDouble(), srcPort["y"].toDouble());
+            QPointF tgtPos(tgtPort["x"].toDouble(), tgtPort["y"].toDouble());
+            
+            if (qAbs(srcPos.x() - sourcePort.x()) < 1 && qAbs(srcPos.y() - sourcePort.y()) < 1 &&
+                qAbs(tgtPos.x() - targetPort.x()) < 1 && qAbs(tgtPos.y() - targetPort.y()) < 1) {
+                
+                // Update control points
+                QJsonArray controlPointsArray;
+                for (const QPointF& point : controlPoints) {
+                    controlPointsArray.append(QJsonObject{{"x", point.x()}, {"y", point.y()}});
+                }
+                conn["controlPoints"] = controlPointsArray;
+                connections[i] = conn;
+                
+                json["connections"] = connections;
+                saveConnectionsJson(json);
+                return;
+            }
+        }
+    }
+}
+
+void PersistenceManager::updateConnectionOrthogonalOffset(const QString& sourceId, const QPointF& sourcePort,
+                                                          const QString& targetId, const QPointF& targetPort,
+                                                          qreal orthogonalOffset)
+{
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray connections = json["connections"].toArray();
+    
+    // Find and update the connection
+    for (int i = 0; i < connections.size(); ++i) {
+        QJsonObject conn = connections[i].toObject();
+        QString src = conn["sourceId"].toString();
+        QString tgt = conn["targetId"].toString();
+        
+        if (src == sourceId && tgt == targetId) {
+            QJsonObject srcPort = conn["sourcePort"].toObject();
+            QJsonObject tgtPort = conn["targetPort"].toObject();
+            
+            QPointF srcPos(srcPort["x"].toDouble(), srcPort["y"].toDouble());
+            QPointF tgtPos(tgtPort["x"].toDouble(), tgtPort["y"].toDouble());
+            
+            if (qAbs(srcPos.x() - sourcePort.x()) < 1 && qAbs(srcPos.y() - sourcePort.y()) < 1 &&
+                qAbs(tgtPos.x() - targetPort.x()) < 1 && qAbs(tgtPos.y() - targetPort.y()) < 1) {
+                
+                // Update orthogonal offset
+                conn["orthogonalOffset"] = orthogonalOffset;
+                connections[i] = conn;
+                
+                json["connections"] = connections;
+                saveConnectionsJson(json);
+                return;
+            }
+        }
+    }
+}
+
+// RTL Module Placement Methods
+
+QJsonObject PersistenceManager::loadRTLPlacementsJson()
+{
+    if (m_workingDirectory.isEmpty()) {
+        return QJsonObject();
+    }
+    
+    QString placementsPath = QDir(m_workingDirectory).filePath("rtl_placements.json");
+    QFile file(placementsPath);
+    
+    if (!file.exists()) {
+        return QJsonObject();
+    }
+    
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QJsonObject();
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    
+    return doc.object();
+}
+
+void PersistenceManager::saveRTLPlacementsJson(const QJsonObject& json)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return;
+    }
+    
+    QString placementsPath = QDir(m_workingDirectory).filePath("rtl_placements.json");
+    QFile file(placementsPath);
+    
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qWarning() << "Failed to save rtl_placements.json";
+        return;
+    }
+    
+    QJsonDocument doc(json);
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+    
+    qDebug() << "Saved rtl_placements.json";
+}
+
+void PersistenceManager::saveRTLModulePlacement(const QString& moduleName, const QString& filePath, const QPointF& position)
+{
+    QJsonObject json = loadRTLPlacementsJson();
+    QJsonArray placements = json["placements"].toArray();
+    
+    QJsonObject placement;
+    placement["moduleName"] = moduleName;
+    placement["filePath"] = filePath;
+    placement["position"] = QJsonObject{{"x", position.x()}, {"y", position.y()}};
+    
+    placements.append(placement);
+    json["placements"] = placements;
+    
+    saveRTLPlacementsJson(json);
+}
+
+void PersistenceManager::updateRTLModulePosition(const QString& moduleName, const QPointF& position)
+{
+    QJsonObject json = loadRTLPlacementsJson();
+    QJsonArray placements = json["placements"].toArray();
+    
+    for (int i = 0; i < placements.size(); ++i) {
+        QJsonObject placement = placements[i].toObject();
+        if (placement["moduleName"].toString() == moduleName) {
+            placement["position"] = QJsonObject{{"x", position.x()}, {"y", position.y()}};
+            placements[i] = placement;
+            json["placements"] = placements;
+            saveRTLPlacementsJson(json);
+            return;
+        }
+    }
+}
+
+void PersistenceManager::removeRTLModulePlacement(const QString& moduleName)
+{
+    QJsonObject json = loadRTLPlacementsJson();
+    QJsonArray placements = json["placements"].toArray();
+    QJsonArray newPlacements;
+    
+    for (int i = 0; i < placements.size(); ++i) {
+        QJsonObject placement = placements[i].toObject();
+        if (placement["moduleName"].toString() != moduleName) {
+            newPlacements.append(placement);
+        }
+    }
+    
+    json["placements"] = newPlacements;
+    saveRTLPlacementsJson(json);
+}
+
+QList<RTLModuleData> PersistenceManager::parseRTLPlacements(const QJsonObject& json)
+{
+    QList<RTLModuleData> result;
+    QJsonArray placements = json["placements"].toArray();
+    
+    for (int i = 0; i < placements.size(); ++i) {
+        QJsonObject placement = placements[i].toObject();
+        
+        RTLModuleData data;
+        data.moduleName = placement["moduleName"].toString();
+        data.filePath = placement["filePath"].toString();
+        
+        QJsonObject pos = placement["position"].toObject();
+        data.position = QPointF(pos["x"].toDouble(), pos["y"].toDouble());
+        
+        result.append(data);
+    }
+    
+    return result;
+}
+
+bool PersistenceManager::loadRTLModules(QGraphicsScene* scene)
+{
+    if (m_workingDirectory.isEmpty() || !scene) {
+        return false;
+    }
+    
+    QJsonObject json = loadRTLPlacementsJson();
+    QList<RTLModuleData> placements = parseRTLPlacements(json);
+    
+    for (const RTLModuleData& data : placements) {
+        // Parse the module
+        ModuleInfo modInfo = SvParser::parseModule(data.filePath, data.moduleName);
+        
+        // Create and place the module
+        ModuleGraphicsItem* module = new ModuleGraphicsItem(modInfo);
+        module->setPos(data.position);
+        scene->addItem(module);
+        
+        // Register the module
+        setRTLModuleName(module, data.moduleName);
+        
+        qDebug() << "Loaded RTL module:" << data.moduleName << "at" << data.position;
+    }
+    
+    return true;
+}
+
+void PersistenceManager::updateComponentRTLConnection(const QString& componentId, const QString& rtlFilePath)
+{
+    if (m_workingDirectory.isEmpty()) {
+        qWarning() << "No working directory set";
+        return;
+    }
+    
+    // Load existing component data
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray components = json["components"].toArray();
+    
+    // Find and update the component
+    for (int i = 0; i < components.size(); ++i) {
+        QJsonObject component = components[i].toObject();
+        if (component["id"].toString() == componentId) {
+            component["rtlConnection"] = rtlFilePath;
+            components[i] = component;
+            json["components"] = components;
+            saveConnectionsJson(json);
+            qDebug() << "Updated RTL connection for" << componentId << "to" << rtlFilePath;
+            return;
+        }
+    }
+    
+    // Component not found, create new entry
+    QJsonObject newComponent;
+    newComponent["id"] = componentId;
+    newComponent["rtlConnection"] = rtlFilePath;
+    components.append(newComponent);
+    json["components"] = components;
+    saveConnectionsJson(json);
+    
+    qDebug() << "Created RTL connection for" << componentId << "to" << rtlFilePath;
+}
+
+QString PersistenceManager::getComponentRTLConnection(const QString& componentId)
+{
+    if (m_workingDirectory.isEmpty()) {
+        return QString();
+    }
+    
+    QJsonObject json = loadConnectionsJson();
+    QJsonArray components = json["components"].toArray();
+    
+    for (const QJsonValue& value : components) {
+        QJsonObject component = value.toObject();
+        if (component["id"].toString() == componentId) {
+            return component["rtlConnection"].toString();
+        }
+    }
+    
+    return QString();
+}
+
+void PersistenceManager::generateTopSvIntegration(const QString& componentId, const QString& rtlFilePath)
+{
+    if (m_workingDirectory.isEmpty()) {
+        qWarning() << "No working directory set";
+        return;
+    }
+    
+    QString topSvPath = QDir(m_workingDirectory).filePath("top.sv");
+    
+    // Check if top.sv exists
+    QFile topFile(topSvPath);
+    if (!topFile.exists()) {
+        qDebug() << "top.sv does not exist, skipping integration";
+        return;
+    }
+    
+    // Read the current top.sv content
+    if (!topFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "Failed to open top.sv for reading";
+        return;
+    }
+    
+    QTextStream in(&topFile);
+    QString content = in.readAll();
+    topFile.close();
+    
+    // Parse the RTL file to get module information
+    QFileInfo rtlFileInfo(rtlFilePath);
+    QString rtlFileName = rtlFileInfo.fileName();
+    QString moduleName = rtlFileInfo.baseName(); // Remove extension
+    
+    // Check if module is already instantiated in top.sv
+    QString instantiationPattern = QString("\\b%1\\s+u_%2\\s*\\(").arg(moduleName).arg(componentId);
+    QRegularExpression regex(instantiationPattern);
+    
+    if (regex.match(content).hasMatch()) {
+        qDebug() << "Module" << moduleName << "already instantiated in top.sv";
+        return;
+    }
+    
+    // Add include statement if not present
+    QString includePattern = QString("#include\\s+\"%1\"").arg(rtlFileName);
+    QRegularExpression includeRegex(includePattern);
+    
+    if (!includeRegex.match(content).hasMatch()) {
+        // Add include at the beginning after any existing includes
+        QRegularExpression includeSectionRegex(R"(^(\s*//.*\n)*\s*(module\s+top))", QRegularExpression::MultilineOption);
+        QRegularExpressionMatch match = includeSectionRegex.match(content);
+        
+        if (match.hasMatch()) {
+            QString includeLine = QString("#include \"%1\"\n\n").arg(rtlFileName);
+            content.insert(match.capturedStart(2), includeLine);
+        }
+    }
+    
+    // Add module instantiation before endmodule
+    QRegularExpression endmoduleRegex(R"(\s*endmodule\s*$)");
+    QRegularExpressionMatch endMatch = endmoduleRegex.match(content);
+    
+    if (endMatch.hasMatch()) {
+        QString instantiation = QString("    %1 u_%2 (.*);\n").arg(moduleName).arg(componentId);
+        content.insert(endMatch.capturedStart(), instantiation);
+        
+        // Write the updated content back
+        if (topFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&topFile);
+            out << content;
+            topFile.close();
+            
+            qDebug() << "Updated top.sv with RTL module instantiation:" << moduleName;
+        } else {
+            qWarning() << "Failed to write updated top.sv";
+        }
+    }
+}
+
+// Schematic file management
+
+void PersistenceManager::initializeSchematicFile()
+{
+    // This function is now only called when we need to ensure the file exists
+    // It will NOT overwrite existing files
+    
+    if (m_workingDirectory.isEmpty()) {
+        qWarning() << "⚠️ Working directory not set - cannot initialize schematic file";
+        return;
+    }
+    
+    QString schematicPath = QDir(m_workingDirectory).filePath("schematic.json");
+    QFile file(schematicPath);
+    
+    // Only create if it doesn't exist
+    if (!file.exists()) {
+        QJsonObject schematicData;
+        schematicData["version"] = "1.0";
+        schematicData["textItems"] = QJsonArray();
+        
+        saveSchematicJson(schematicData);
+        qDebug() << "📝 Created new schematic.json in" << m_workingDirectory;
+    } else {
+        qDebug() << "✅ schematic.json already exists, not modifying it";
+    }
+}
+
+QJsonObject PersistenceManager::loadSchematicJson()
+{
+    if (m_workingDirectory.isEmpty()) {
+        qWarning() << "⚠️ Working directory not set for schematic";
+        return QJsonObject();
+    }
+    
+    QString schematicPath = QDir(m_workingDirectory).filePath("schematic.json");
+    QFile file(schematicPath);
+    
+    if (!file.exists()) {
+        qDebug() << "📄 schematic.json does not exist yet, will create on first save";
+        // Return empty but valid structure - don't initialize yet
+        QJsonObject emptyData;
+        emptyData["version"] = "1.0";
+        emptyData["textItems"] = QJsonArray();
+        return emptyData;
+    }
+    
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "⚠️ Failed to open schematic.json for reading";
+        return QJsonObject();
+    }
+    
+    QByteArray data = file.readAll();
+    file.close();
+    
+    if (data.isEmpty()) {
+        qWarning() << "⚠️ schematic.json is empty, returning default structure";
+        QJsonObject emptyData;
+        emptyData["version"] = "1.0";
+        emptyData["textItems"] = QJsonArray();
+        return emptyData;
+    }
+    
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+    
+    if (parseError.error != QJsonParseError::NoError) {
+        qWarning() << "⚠️ JSON parse error in schematic.json:" << parseError.errorString();
+        qWarning() << "Creating backup and returning default structure";
+        
+        // Create backup of corrupted file
+        QString backupPath = schematicPath + ".backup";
+        QFile::copy(schematicPath, backupPath);
+        
+        QJsonObject emptyData;
+        emptyData["version"] = "1.0";
+        emptyData["textItems"] = QJsonArray();
+        return emptyData;
+    }
+    
+    QJsonObject jsonObj = doc.object();
+    
+    // Ensure required fields exist
+    if (!jsonObj.contains("version")) {
+        jsonObj["version"] = "1.0";
+    }
+    if (!jsonObj.contains("textItems")) {
+        jsonObj["textItems"] = QJsonArray();
+    }
+    
+    qDebug() << "📂 Loaded schematic.json with" << jsonObj["textItems"].toArray().size() << "text item(s)";
+    
+    return jsonObj;
+}
+
+void PersistenceManager::saveSchematicJson(const QJsonObject& json)
+{
+    if (m_workingDirectory.isEmpty()) {
+        qWarning() << "⚠️ Working directory not set for schematic";
+        return;
+    }
+    
+    QString schematicPath = QDir(m_workingDirectory).filePath("schematic.json");
+    
+    // Ensure the directory exists
+    QDir dir = QFileInfo(schematicPath).dir();
+    if (!dir.exists()) {
+        dir.mkpath(".");
+        qDebug() << "📁 Created directory for schematic.json";
+    }
+    
+    // Ensure version field exists
+    QJsonObject jsonToSave = json;
+    if (!jsonToSave.contains("version")) {
+        jsonToSave["version"] = "1.0";
+    }
+    
+    // Ensure textItems field exists
+    if (!jsonToSave.contains("textItems")) {
+        jsonToSave["textItems"] = QJsonArray();
+    }
+    
+    // Write with indentation for readability
+    QJsonDocument doc(jsonToSave);
+    
+    // Use QSaveFile for atomic writes (prevents corruption)
+    QFile file(schematicPath);
+    
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        qWarning() << "⚠️ Failed to open schematic.json for writing:" << file.errorString();
+        qWarning() << "⚠️ Path:" << schematicPath;
+        return;
+    }
+    
+    qint64 bytesWritten = file.write(doc.toJson(QJsonDocument::Indented));
+    file.flush(); // Ensure data is written to disk
+    file.close();
+    
+    if (bytesWritten > 0) {
+        int itemCount = jsonToSave["textItems"].toArray().size();
+        qDebug() << "💾 Saved schematic.json with" << itemCount << "text item(s) (" << bytesWritten << "bytes)";
+        qDebug() << "💾 File path:" << schematicPath;
+    } else {
+        qWarning() << "⚠️ Failed to write data to schematic.json";
+    }
+    
+    // Verify the file was written correctly
+    QFile verifyFile(schematicPath);
+    if (verifyFile.exists() && verifyFile.size() > 0) {
+        qDebug() << "✅ Verified schematic.json saved successfully, size:" << verifyFile.size() << "bytes";
+    } else {
+        qWarning() << "⚠️ Verification failed - schematic.json may not have been saved!";
+    }
+}
+
+// Text item persistence implementation (now using schematic.json)
+
+QJsonObject PersistenceManager::loadTextItemsJson()
+{
+    // Load from schematic.json instead of separate text_items.json
+    return loadSchematicJson();
+}
+
+void PersistenceManager::saveTextItemsJson(const QJsonObject& json)
+{
+    // Save to schematic.json instead of separate text_items.json
+    saveSchematicJson(json);
+}
+
+QList<TextItemData> PersistenceManager::parseTextItems(const QJsonObject& json)
+{
+    QList<TextItemData> textItems;
+    QJsonArray itemsArray = json["textItems"].toArray();
+    
+    for (const QJsonValue& value : itemsArray) {
+        QJsonObject itemObj = value.toObject();
+        
+        TextItemData data;
+        data.text = itemObj["text"].toString();
+        
+        QJsonObject posObj = itemObj["position"].toObject();
+        data.position = QPointF(posObj["x"].toDouble(), posObj["y"].toDouble());
+        
+        QJsonObject colorObj = itemObj["color"].toObject();
+        data.color = QColor(colorObj["r"].toInt(), colorObj["g"].toInt(), colorObj["b"].toInt(), colorObj["a"].toInt());
+        
+        QJsonObject fontObj = itemObj["font"].toObject();
+        data.font.setFamily(fontObj["family"].toString());
+        data.font.setPointSize(fontObj["size"].toInt());
+        data.font.setBold(fontObj["bold"].toBool());
+        data.font.setItalic(fontObj["italic"].toBool());
+        
+        textItems.append(data);
+    }
+    
+    return textItems;
+}
+
+void PersistenceManager::saveTextItem(const QString& text, const QPointF& position, const QColor& color, const QFont& font)
+{
+    // Load existing schematic data (or get empty structure)
+    QJsonObject json = loadSchematicJson();
+    
+    // Ensure version field exists
+    if (!json.contains("version")) {
+        json["version"] = "1.0";
+    }
+    
+    // Get existing items array
+    QJsonArray itemsArray = json["textItems"].toArray();
+    
+    // Create new text item object with all properties
+    QJsonObject itemObj;
+    itemObj["text"] = text;
+    
+    // Save position
+    QJsonObject posObj;
+    posObj["x"] = position.x();
+    posObj["y"] = position.y();
+    itemObj["position"] = posObj;
+    
+    // Save color
+    QJsonObject colorObj;
+    colorObj["r"] = color.red();
+    colorObj["g"] = color.green();
+    colorObj["b"] = color.blue();
+    colorObj["a"] = color.alpha();
+    itemObj["color"] = colorObj;
+    
+    // Save font
+    QJsonObject fontObj;
+    fontObj["family"] = font.family();
+    fontObj["size"] = font.pointSize();
+    fontObj["bold"] = font.bold();
+    fontObj["italic"] = font.italic();
+    itemObj["font"] = fontObj;
+    
+    // Add to array
+    itemsArray.append(itemObj);
+    json["textItems"] = itemsArray;
+    
+    // Save to schematic.json
+    saveSchematicJson(json);
+    
+    qDebug() << "💾 Saved text item to schematic.json:" 
+             << "Text:" << text 
+             << "| Position: (" << position.x() << "," << position.y() << ")"
+             << "| Total items:" << itemsArray.size();
+}
+
+void PersistenceManager::updateTextItem(const QString& oldText, const QPointF& oldPosition, 
+                                       const QString& newText, const QPointF& newPosition, 
+                                       const QColor& color, const QFont& font)
+{
+    QJsonObject json = loadTextItemsJson();
+    QJsonArray itemsArray = json["textItems"].toArray();
+    
+    bool found = false;
+    
+    // Find and update the matching item
+    for (int i = 0; i < itemsArray.size(); ++i) {
+        QJsonObject itemObj = itemsArray[i].toObject();
+        QJsonObject posObj = itemObj["position"].toObject();
+        QPointF pos(posObj["x"].toDouble(), posObj["y"].toDouble());
+        QString text = itemObj["text"].toString();
+        
+        // Match by both text and position (within tolerance)
+        if (text == oldText && (pos - oldPosition).manhattanLength() < 5.0) {
+            // Update all properties simultaneously
+            itemObj["text"] = newText;
+            
+            QJsonObject newPosObj;
+            newPosObj["x"] = newPosition.x();
+            newPosObj["y"] = newPosition.y();
+            itemObj["position"] = newPosObj;
+            
+            QJsonObject colorObj;
+            colorObj["r"] = color.red();
+            colorObj["g"] = color.green();
+            colorObj["b"] = color.blue();
+            colorObj["a"] = color.alpha();
+            itemObj["color"] = colorObj;
+            
+            QJsonObject fontObj;
+            fontObj["family"] = font.family();
+            fontObj["size"] = font.pointSize();
+            fontObj["bold"] = font.bold();
+            fontObj["italic"] = font.italic();
+            itemObj["font"] = fontObj;
+            
+            itemsArray[i] = itemObj;
+            json["textItems"] = itemsArray;
+            saveTextItemsJson(json);
+            
+            qDebug() << "✅ Updated text item:" 
+                     << "Text:" << oldText << "→" << newText
+                     << "| Position:" << oldPosition << "→" << newPosition;
+            
+            found = true;
+            break;
+        }
+    }
+    
+    if (!found) {
+        qWarning() << "⚠️ Text item not found for update:" << oldText << "at" << oldPosition;
+        qDebug() << "Available items in schematic.json:";
+        for (int i = 0; i < itemsArray.size(); ++i) {
+            QJsonObject itemObj = itemsArray[i].toObject();
+            QJsonObject posObj = itemObj["position"].toObject();
+            qDebug() << "  -" << itemObj["text"].toString() 
+                     << "at (" << posObj["x"].toDouble() << "," << posObj["y"].toDouble() << ")";
+        }
+    }
+}
+
+void PersistenceManager::removeTextItem(const QString& text, const QPointF& position)
+{
+    QJsonObject json = loadSchematicJson();
+    QJsonArray itemsArray = json["textItems"].toArray();
+    
+    // Find and remove the matching item
+    for (int i = 0; i < itemsArray.size(); ++i) {
+        QJsonObject itemObj = itemsArray[i].toObject();
+        QJsonObject posObj = itemObj["position"].toObject();
+        QPointF pos(posObj["x"].toDouble(), posObj["y"].toDouble());
+        QString itemText = itemObj["text"].toString();
+        
+        // Match by both text and position (within tolerance)
+        if (itemText == text && (pos - position).manhattanLength() < 5.0) {
+            itemsArray.removeAt(i);
+            json["textItems"] = itemsArray;
+            saveSchematicJson(json);
+            
+            qDebug() << "🗑️ Removed text item from schematic.json:" << text 
+                     << "| Remaining items:" << (itemsArray.size() - 1);
+            return;
+        }
+    }
+    
+    qWarning() << "⚠️ Text item not found for removal:" << text << "at" << position;
+}
+
+bool PersistenceManager::loadTextItems(QGraphicsScene* scene)
+{
+    if (!scene) {
+        qWarning() << "⚠️ Null scene provided to loadTextItems";
+        return false;
+    }
+    
+    QJsonObject json = loadSchematicJson();
+    if (json.isEmpty() || !json.contains("textItems")) {
+        qDebug() << "📄 No text items in schematic.json (file may be new)";
+        return true; // Not an error, just no items
+    }
+    
+    QList<TextItemData> textItems = parseTextItems(json);
+    
+    if (textItems.isEmpty()) {
+        qDebug() << "📄 schematic.json exists but textItems array is empty";
+        return true;
+    }
+    
+    qDebug() << "📂 Loading" << textItems.size() << "text item(s) from schematic.json";
+    
+    for (const TextItemData& data : textItems) {
+        TextGraphicsItem* textItem = new TextGraphicsItem(data.text);
+        textItem->setPos(data.position);
+        textItem->setTextColor(data.color);
+        textItem->setTextFont(data.font);
+        scene->addItem(textItem);
+        
+        qDebug() << "  ✅ Loaded:" << data.text 
+                 << "at (" << data.position.x() << "," << data.position.y() << ")";
+    }
+    
+    qDebug() << "✅ Successfully loaded" << textItems.size() << "text item(s) from schematic.json";
+    return true;
+}
