@@ -9,6 +9,7 @@
 #include "ui/MainWindow.h"
 #include "ui/mainwindow/WidgetManager.h"
 #include "ui/widgets/EditComponentWidget.h"
+#include "ui/widgets/PortEditorDialog.h"
 #include "parsers/ComponentPortParser.h"
 #include "parsers/SvParser.h"
 #include <QPainter>
@@ -265,6 +266,9 @@ void ReadyComponentGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent
     QAction* editAction = menu.addAction("Edit");
     editAction->setIcon(QIcon());  // You can add icons if you have them
     
+    QAction* editPortsAction = menu.addAction("Edit Ports");
+    editPortsAction->setToolTip("Customize the number of inputs and outputs for this component");
+    
     QAction* changeColorAction = menu.addAction("Change Color");
     
     // Show menu at cursor position
@@ -272,6 +276,8 @@ void ReadyComponentGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent
     
     if (selectedAction == editAction) {
         openCodeEditor();
+    } else if (selectedAction == editPortsAction) {
+        openPortEditor();
     } else if (selectedAction == changeColorAction) {
         changeComponentColor();
     }
@@ -547,5 +553,119 @@ QList<WireGraphicsItem*> ReadyComponentGraphicsItem::getWires() const
 void ReadyComponentGraphicsItem::updateWires()
 {
     m_wireManager->updateWires();
+}
+
+void ReadyComponentGraphicsItem::openPortEditor()
+{
+    // Safety check - ensure component is still valid and in a scene
+    if (!scene()) {
+        qWarning() << "⚠️ Component not in scene, cannot open port editor";
+        return;
+    }
+    
+    qDebug() << "🔧 Opening port editor for component:" << getName();
+    
+    // Create a ModuleInfo structure from the current component
+    ModuleInfo componentInfo;
+    componentInfo.name = getName();
+    
+    // Get current port counts from the port manager
+    if (m_portManager) {
+        componentInfo.inputs = generatePorts(m_portManager->getNumInputPorts(), "in");
+        componentInfo.outputs = generatePorts(m_portManager->getNumOutputPorts(), "out");
+    } else {
+        // Default ports if no port manager
+        componentInfo.inputs = generatePorts(1, "in");
+        componentInfo.outputs = generatePorts(1, "out");
+    }
+    
+    // Open port editor dialog
+    PortEditorDialog* dialog = new PortEditorDialog(componentInfo, nullptr);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    
+    if (dialog->exec() == QDialog::Accepted) {
+        // Safety check - ensure component is still valid after dialog
+        if (!scene()) {
+            qWarning() << "⚠️ Component removed from scene during port editing";
+            return;
+        }
+        
+        // Update component with new port configuration
+        ModuleInfo newInfo = dialog->getUpdatedModuleInfo();
+        updateComponentPorts(newInfo);
+    }
+}
+
+QList<Port> ReadyComponentGraphicsItem::generatePorts(int count, const QString& prefix) const
+{
+    QList<Port> ports;
+    
+    for (int i = 0; i < count; ++i) {
+        Port port;
+        port.name = QString("%1_%2").arg(prefix).arg(i);
+        port.width = "[0:0]";  // Default 1-bit width
+        port.direction = (prefix == "in") ? Port::Input : Port::Output;
+        ports.append(port);
+    }
+    
+    return ports;
+}
+
+void ReadyComponentGraphicsItem::updateComponentPorts(const ModuleInfo& newInfo)
+{
+    qDebug() << "🔄 Updating component ports for:" << getName() 
+             << "| Old Inputs:" << (m_portManager ? m_portManager->getNumInputPorts() : 0)
+             << "| Old Outputs:" << (m_portManager ? m_portManager->getNumOutputPorts() : 0)
+             << "| New Inputs:" << newInfo.inputs.size() 
+             << "| New Outputs:" << newInfo.outputs.size();
+    
+    // Safety check - ensure we're still in a scene
+    if (!scene()) {
+        qWarning() << "⚠️ Component not in scene during port update";
+        return;
+    }
+    
+    // Update the port manager with new port configuration
+    if (m_portManager) {
+        m_portManager->updatePortsFromModuleInfo(newInfo);
+    } else {
+        qWarning() << "⚠️ Port manager is null during port update";
+        return;
+    }
+    
+    // Calculate new component size based on port count
+    int maxPorts = qMax(newInfo.inputs.size(), newInfo.outputs.size());
+    qreal minHeight = qMax(40.0, maxPorts * 20.0 + 20.0); // 20px per port + 20px padding
+    qreal minWidth = qMax(50.0, 80.0); // Minimum width
+    
+    // Resize component if needed to accommodate ports
+    if (m_height < minHeight || m_width < minWidth) {
+        qreal newWidth = qMax(m_width, minWidth);
+        qreal newHeight = qMax(m_height, minHeight);
+        
+        qDebug() << "📏 Resizing component to accommodate ports:" 
+                 << "| Old size:" << m_width << "x" << m_height
+                 << "| New size:" << newWidth << "x" << newHeight;
+        
+        setSize(newWidth, newHeight);
+    }
+    
+    // Force a geometry update to recalculate bounding rect
+    prepareGeometryChange();
+    
+    // Update wire port positions BEFORE updating wires
+    if (m_wireManager) {
+        m_wireManager->updateWirePortPositions(this);
+    }
+    
+    // Update the display
+    update();
+    
+    // Update any connected wires with safety check
+    if (m_wireManager) {
+        updateWires();
+    }
+    
+    qDebug() << "✅ Component ports updated successfully for:" << getName();
 }
 

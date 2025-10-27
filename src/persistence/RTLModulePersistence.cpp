@@ -7,6 +7,8 @@
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QJsonObject>
+#include <QDateTime>
 #include <QDebug>
 #include <QGraphicsScene>
 
@@ -125,6 +127,53 @@ void RTLModulePersistence::updateRTLModulePosition(const QString& moduleName, co
             placements[i] = placement;
             json["placements"] = placements;
             saveRTLPlacementsJson(json);
+            return;
+        }
+    }
+}
+
+void RTLModulePersistence::updateRTLModulePorts(const QString& moduleName, const QList<Port>& inputs, const QList<Port>& outputs)
+{
+    QJsonObject json = loadRTLPlacementsJson();
+    QJsonArray placements = json["placements"].toArray();
+    
+    for (int i = 0; i < placements.size(); ++i) {
+        QJsonObject placement = placements[i].toObject();
+        if (placement["moduleName"].toString() == moduleName) {
+            // Update port configuration
+            QJsonObject ports;
+            
+            // Input ports
+            QJsonArray inputPorts;
+            for (const Port& port : inputs) {
+                QJsonObject portObj;
+                portObj["name"] = port.name;
+                portObj["width"] = port.width;
+                portObj["direction"] = "input";
+                inputPorts.append(portObj);
+            }
+            ports["inputs"] = inputPorts;
+            
+            // Output ports
+            QJsonArray outputPorts;
+            for (const Port& port : outputs) {
+                QJsonObject portObj;
+                portObj["name"] = port.name;
+                portObj["width"] = port.width;
+                portObj["direction"] = "output";
+                outputPorts.append(portObj);
+            }
+            ports["outputs"] = outputPorts;
+            
+            placement["ports"] = ports;
+            placement["modified"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+            placements[i] = placement;
+            json["placements"] = placements;
+            saveRTLPlacementsJson(json);
+            
+            qDebug() << "Updated port configuration for module:" << moduleName 
+                     << "| Inputs:" << inputs.size() 
+                     << "| Outputs:" << outputs.size();
             return;
         }
     }

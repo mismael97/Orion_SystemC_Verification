@@ -223,28 +223,31 @@ void SchematicScene::mousePressEvent(QGraphicsSceneMouseEvent* event)
             bool itemIsModule;
             QPointF port = getPortAt(sourceItem, event->scenePos(), isInput, itemIsModule);
             
-            if (!port.isNull() && !isInput) {
-                // Check if this output port is already connected
+            if (!port.isNull()) {
+                // Check if this port is already connected
                 bool portAlreadyConnected = false;
                 if (itemIsModule) {
                     ModuleGraphicsItem* mod = dynamic_cast<ModuleGraphicsItem*>(sourceItem);
-                    portAlreadyConnected = mod && mod->isPortConnected(port, false);
+                    portAlreadyConnected = mod && mod->isPortConnected(port, isInput);
                 } else {
                     ReadyComponentGraphicsItem* comp = dynamic_cast<ReadyComponentGraphicsItem*>(sourceItem);
-                    portAlreadyConnected = comp && comp->isPortConnected(port, false);
+                    portAlreadyConnected = comp && comp->isPortConnected(port, isInput);
                 }
                 
-                if (portAlreadyConnected) {
-                    // Port already has a connection, don't start new wire
+                // Only prevent new connections from input ports that are already connected
+                // Output ports should allow multiple connections (fan-out)
+                if (portAlreadyConnected && isInput) {
+                    // Input port already has a connection, don't start new wire
                     event->accept();
                     return;
                 }
                 
-                // Start drawing wire from output port
+                // Start drawing wire from any port (input or output)
                 m_isDrawingWire = true;
                 m_wireSourceItem = sourceItem;
                 m_wireSourcePort = port;
                 m_wireSourceIsModule = itemIsModule;
+                m_wireSourceIsInput = isInput;  // Store whether source is input or output
                 
                 // Create temporary wire with source component
                 ReadyComponentGraphicsItem* sourceAsReady = itemIsModule ? 
@@ -380,31 +383,32 @@ void SchematicScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
             bool itemIsModule;
             QPointF targetPort = getPortAt(targetItem, event->scenePos(), isInput, itemIsModule);
             
-            if (!targetPort.isNull() && isInput) {
-                // Check if this input port is already connected
+            if (!targetPort.isNull()) {
+                // Check if this port is already connected
                 bool portAlreadyConnected = false;
                 WireGraphicsItem* existingWire = nullptr;
                 
                 if (targetIsModule) {
                     ModuleGraphicsItem* mod = dynamic_cast<ModuleGraphicsItem*>(targetItem);
                     if (mod) {
-                        portAlreadyConnected = mod->isPortConnected(targetPort, true);
+                        portAlreadyConnected = mod->isPortConnected(targetPort, isInput);
                         if (portAlreadyConnected) {
-                            existingWire = mod->getWireAtPort(targetPort, true);
+                            existingWire = mod->getWireAtPort(targetPort, isInput);
                         }
                     }
                 } else {
                     ReadyComponentGraphicsItem* comp = dynamic_cast<ReadyComponentGraphicsItem*>(targetItem);
                     if (comp) {
-                        portAlreadyConnected = comp->isPortConnected(targetPort, true);
+                        portAlreadyConnected = comp->isPortConnected(targetPort, isInput);
                         if (portAlreadyConnected) {
-                            existingWire = comp->getWireAtPort(targetPort, true);
+                            existingWire = comp->getWireAtPort(targetPort, isInput);
                         }
                     }
                 }
                 
-                // If port already connected, remove the old wire first
-                if (portAlreadyConnected && existingWire) {
+                // If input port already connected, remove the old wire first
+                // Output ports can have multiple connections (fan-out)
+                if (portAlreadyConnected && existingWire && isInput) {
                     // Remove wire from both source and target
                     if (existingWire->getSource()) {
                         existingWire->getSource()->removeWire(existingWire);
@@ -416,16 +420,44 @@ void SchematicScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
                     delete existingWire;
                 }
                 
-                // Valid connection from output to input
+                // Valid connection - determine source and target based on port types
                 ReadyComponentGraphicsItem* targetAsReady = targetIsModule ? 
                     reinterpret_cast<ReadyComponentGraphicsItem*>(moduleTarget) : readyTarget;
-                    
-                m_temporaryWire->setTarget(targetAsReady);
-                m_temporaryWire->setTargetPort(targetPort);
                 
-                // Register wire with both components
-                addWireToItem(m_wireSourceItem, m_temporaryWire, m_wireSourceIsModule);
-                addWireToItem(targetItem, m_temporaryWire, targetIsModule);
+                // If source is input and target is output, we need to create a new wire
+                // because WireGraphicsItem doesn't support changing the source after creation
+                if (m_wireSourceIsInput && !isInput) {
+                    // Source is input, target is output - create new wire with swapped source/target
+                    removeItem(m_temporaryWire);
+                    delete m_temporaryWire;
+                    
+                    // Create new wire with target as source and source as target
+                    m_temporaryWire = new WireGraphicsItem(targetAsReady, targetPort, 
+                                                          reinterpret_cast<ReadyComponentGraphicsItem*>(m_wireSourceItem), 
+                                                          m_wireSourcePort);
+                    
+                    // Register wire with swapped components
+                    addWireToItem(targetItem, m_temporaryWire, targetIsModule);
+                    addWireToItem(m_wireSourceItem, m_temporaryWire, m_wireSourceIsModule);
+                } else if (!m_wireSourceIsInput && isInput) {
+                    // Source is output, target is input - normal connection
+                    m_temporaryWire->setTarget(targetAsReady);
+                    m_temporaryWire->setTargetPort(targetPort);
+                    
+                    // Register wire with both components
+                    addWireToItem(m_wireSourceItem, m_temporaryWire, m_wireSourceIsModule);
+                    addWireToItem(targetItem, m_temporaryWire, targetIsModule);
+                } else {
+                    // Same type ports - don't allow connection
+                    qDebug() << "Cannot connect" << (m_wireSourceIsInput ? "input" : "output") 
+                             << "to" << (isInput ? "input" : "output");
+                    removeItem(m_temporaryWire);
+                    delete m_temporaryWire;
+                    m_temporaryWire = nullptr;
+                    m_isDrawingWire = false;
+                    event->accept();
+                    return;
+                }
                 
                 // Register wire with the global wire manager for intelligent routing
                 if (m_wireManager) {

@@ -46,8 +46,8 @@ ComponentCardWidget::ComponentCardWidget(const QString& componentName,
 void ComponentCardWidget::setupUI()
 {
     m_mainLayout = new QVBoxLayout(this);
-    m_mainLayout->setContentsMargins(10, 10, 10, 10);
-    m_mainLayout->setSpacing(8);
+    m_mainLayout->setContentsMargins(15, 15, 15, 15);
+    m_mainLayout->setSpacing(12);
     
     // Icon label
     m_iconLabel = new QLabel(this);
@@ -55,21 +55,16 @@ void ComponentCardWidget::setupUI()
     m_iconLabel->setFixedSize(m_iconSize, m_iconSize);
     m_mainLayout->addWidget(m_iconLabel, 0, Qt::AlignCenter);
     
-    // Name label
+    // Name label with fixed padding from preview
     m_nameLabel = new QLabel(m_componentName, this);
     m_nameLabel->setAlignment(Qt::AlignCenter);
-    m_nameLabel->setFont(QFont("Arial", 12, QFont::Bold));
-    m_nameLabel->setStyleSheet("color: #333333;");
+    m_nameLabel->setFont(QFont("Tajawal", 13, QFont::Bold));
+    m_nameLabel->setStyleSheet("color: #333333; padding: 8px;");
+    m_nameLabel->setWordWrap(true);
     m_mainLayout->addWidget(m_nameLabel);
     
-    // Description label
-    m_descriptionLabel = new QLabel(m_description, this);
-    m_descriptionLabel->setAlignment(Qt::AlignCenter);
-    m_descriptionLabel->setFont(QFont("Arial", 9));
-    m_descriptionLabel->setStyleSheet("color: #666666;");
-    m_descriptionLabel->setWordWrap(true);
-    m_descriptionLabel->setMaximumHeight(40);
-    m_mainLayout->addWidget(m_descriptionLabel);
+    // Remove description label from card - it will be shown in preview
+    // m_descriptionLabel is kept for compatibility but not added to layout
     
     // Add stretch to push everything to the top
     m_mainLayout->addStretch();
@@ -301,7 +296,10 @@ void ComponentCardWidget::showPreview()
     
     // Create preview widget if it doesn't exist
     if (!m_previewWidget) {
-        m_previewWidget = new ComponentPreviewWidget(m_componentName);
+        m_previewWidget = new ComponentPreviewWidget(m_componentName, m_description);
+    } else {
+        // Update description in case it changed
+        m_previewWidget->setDescription(m_description);
     }
     
     // Update preview position and show

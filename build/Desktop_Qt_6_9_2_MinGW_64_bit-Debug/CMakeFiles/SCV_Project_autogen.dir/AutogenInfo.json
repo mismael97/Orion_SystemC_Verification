@@ -569,6 +569,12 @@
 			null
 		],
 		[
+			"C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/PortEditorDialog.h",
+			"MU",
+			"S2YPLG5PUX/moc_PortEditorDialog.cpp",
+			null
+		],
+		[
 			"C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/TerminalSectionWidget.h",
 			"MU",
 			"S2YPLG5PUX/moc_TerminalSectionWidget.cpp",
@@ -855,6 +861,11 @@
 		],
 		[
 			"C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/MinimapWidget.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/PortEditorDialog.cpp",
 			"MU",
 			null
 		],

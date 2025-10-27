@@ -22,6 +22,7 @@
 #include "S2YPLG5PUX/moc_EditComponentWidget.cpp"
 #include "S2YPLG5PUX/moc_FileExplorerTreeWidget.cpp"
 #include "S2YPLG5PUX/moc_MinimapWidget.cpp"
+#include "S2YPLG5PUX/moc_PortEditorDialog.cpp"
 #include "S2YPLG5PUX/moc_TerminalSectionWidget.cpp"
 #include "S2YPLG5PUX/moc_VerticalToolbar.cpp"
 #include "S2YPLG5PUX/moc_dragdropgraphicsview.cpp"

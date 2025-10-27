@@ -8,9 +8,10 @@
 #include <QStyleOptionGraphicsItem>
 #include <QDebug>
 
-ComponentPreviewWidget::ComponentPreviewWidget(const QString& componentName, QWidget* parent)
+ComponentPreviewWidget::ComponentPreviewWidget(const QString& componentName, const QString& description, QWidget* parent)
     : QWidget(parent)
     , m_componentName(componentName)
+    , m_description(description)
     , m_width(120)
     , m_height(80)
     , m_fadeAlpha(0)
@@ -54,6 +55,16 @@ void ComponentPreviewWidget::setComponentName(const QString& name)
         m_componentName = name;
         setupComponent();
         setupVisualProperties();
+        QSize optimalSize = calculateOptimalSize();
+        setFixedSize(optimalSize);
+        update();
+    }
+}
+
+void ComponentPreviewWidget::setDescription(const QString& description)
+{
+    if (m_description != description) {
+        m_description = description;
         QSize optimalSize = calculateOptimalSize();
         setFixedSize(optimalSize);
         update();
@@ -127,10 +138,19 @@ QSize ComponentPreviewWidget::calculateOptimalSize() const
     qreal portRadius = ComponentPortManager::PORT_RADIUS;
     qreal padding = 20; // Extra padding around the component
     
-    qreal totalWidth = m_width + (portRadius * 2) + padding;
-    qreal totalHeight = m_height + (portRadius * 2) + padding;
+    qreal componentWidth = m_width + (portRadius * 2) + padding;
+    qreal componentHeight = m_height + (portRadius * 2) + padding;
     
-    return QSize(static_cast<int>(totalWidth), static_cast<int>(totalHeight));
+    // Add space for description if it exists
+    qreal totalHeight = componentHeight;
+    if (!m_description.isEmpty()) {
+        // Add space for description text (2 lines max, with padding)
+        QFontMetrics fontMetrics(QFont("Tajawal", 10));
+        int descriptionHeight = fontMetrics.height() * 2 + 20; // 2 lines + padding
+        totalHeight += descriptionHeight;
+    }
+    
+    return QSize(static_cast<int>(componentWidth), static_cast<int>(totalHeight));
 }
 
 void ComponentPreviewWidget::paintEvent(QPaintEvent* event)
@@ -159,6 +179,25 @@ void ComponentPreviewWidget::paintEvent(QPaintEvent* event)
     
     // Draw ports
     m_renderer->drawPorts(&painter, m_portManager.get(), QList<class WireGraphicsItem*>(), portRadius);
+    
+    // Draw description below the component if it exists
+    if (!m_description.isEmpty()) {
+        painter.setFont(QFont("Tajawal", 10));
+        painter.setPen(QColor("#666666"));
+        
+        // Calculate description area
+        QRectF descriptionRect(offsetX, offsetY + m_height + portRadius * 2 + 10, 
+                              m_width + portRadius * 2, 40);
+        
+        // Draw description background
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(255, 255, 255, 200));
+        painter.drawRoundedRect(descriptionRect.adjusted(-5, -5, 5, 5), 5, 5);
+        
+        // Draw description text
+        painter.setPen(QColor("#333333"));
+        painter.drawText(descriptionRect, Qt::AlignCenter | Qt::TextWordWrap, m_description);
+    }
 }
 
 void ComponentPreviewWidget::showEvent(QShowEvent* event)

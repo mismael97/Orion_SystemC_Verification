@@ -34,6 +34,7 @@
 #include <QList>
 #include <QObject>
 #include <memory>
+#include "parsers/SvParser.h"
 
 class WireGraphicsItem;
 class ComponentPortManager;
@@ -99,6 +100,7 @@ public:
 
     // Basic properties
     QString getName() const { return m_name; }
+    void setName(const QString& name) { m_name = name; }
     void setSize(qreal width, qreal height);
     QSizeF getSize() const { return QSizeF(m_width, m_height); }
     
@@ -170,7 +172,10 @@ private:
     
     // Helper methods
     void openCodeEditor();
+    void openPortEditor();
     void changeComponentColor();
+    void updateComponentPorts(const ModuleInfo& newInfo);
+    QList<Port> generatePorts(int count, const QString& prefix) const;
     qreal getPortRadius() const;
 };
 

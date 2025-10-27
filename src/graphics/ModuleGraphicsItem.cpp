@@ -4,11 +4,13 @@
 #include "graphics/ReadyComponentGraphicsItem.h"
 #include "graphics/ready/ComponentPortManager.h"
 #include "utils/PersistenceManager.h"
+#include "ui/widgets/PortEditorDialog.h"
 #include <QPainter>
 #include <QPushButton>
 #include <QFontMetrics>
 #include <QGraphicsSceneHoverEvent>
 #include <QGraphicsSceneMouseEvent>
+#include <QGraphicsSceneContextMenuEvent>
 #include <QApplication>
 #include <QMainWindow>
 #include <QVBoxLayout>
@@ -16,6 +18,7 @@
 #include <QGraphicsScene>
 #include <QLabel>
 #include <QDialog>
+#include <QMenu>
 #include <QtMath>
 
 const int ModuleGraphicsItem::PORT_RADIUS = 8;
@@ -256,30 +259,35 @@ void ModuleGraphicsItem::hoverEnterEvent(QGraphicsSceneHoverEvent *event)
         m_hovered = true;
         update();
     } else {
+        // Handle hover for detailed view
         QPointF pos = event->pos();
-
-        for (int i = 0; i < m_info.inputs.size(); ++i) {
-            int y = LABEL_HEIGHT + PADDING + i * PORT_SPACING;
-            QPointF center(PADDING, y);
-            if (QLineF(center, pos).length() <= PORT_RADIUS + 10) {
-                m_hoveredPortIndex = i;
-                m_isInputHovered = true;
-                m_isHovering = true;
-                update();
-                return;
+        bool isInput;
+        QPointF port = getPortAt(pos, isInput);
+        
+        if (!port.isNull()) {
+            // Find the port index
+            if (isInput) {
+                QList<QPointF> inputPorts = getInputPorts();
+                for (int i = 0; i < inputPorts.size(); ++i) {
+                    if (QLineF(inputPorts[i], port).length() < 1) {
+                        m_hoveredPortIndex = i;
+                        m_isInputHovered = true;
+                        m_isHovering = true;
+                        break;
+                    }
+                }
+            } else {
+                QList<QPointF> outputPorts = getOutputPorts();
+                for (int i = 0; i < outputPorts.size(); ++i) {
+                    if (QLineF(outputPorts[i], port).length() < 1) {
+                        m_hoveredPortIndex = i;
+                        m_isInputHovered = false;
+                        m_isHovering = true;
+                        break;
+                    }
+                }
             }
-        }
-
-        for (int i = 0; i < m_info.outputs.size(); ++i) {
-            int y = LABEL_HEIGHT + PADDING + i * PORT_SPACING;
-            QPointF center(boundingRect().width() - PADDING, y);
-            if (QLineF(center, pos).length() <= PORT_RADIUS + 10) {
-                m_hoveredPortIndex = i;
-                m_isInputHovered = false;
-                m_isHovering = true;
-                update();
-                return;
-            }
+            update();
         }
     }
 
@@ -322,6 +330,13 @@ QList<QPointF> ModuleGraphicsItem::getInputPorts() const
     if (m_isRTLView) {
         // 1 TLM input port on the left side (centered vertically)
         ports.append(QPointF(0, 40));
+    } else {
+        // Detailed view - show all input ports
+        for (int i = 0; i < m_info.inputs.size(); ++i) {
+            int y = LABEL_HEIGHT + PADDING + i * PORT_SPACING;
+            QPointF center(PADDING, y);
+            ports.append(center);
+        }
     }
     return ports;
 }
@@ -332,31 +347,36 @@ QList<QPointF> ModuleGraphicsItem::getOutputPorts() const
     if (m_isRTLView) {
         // 1 TLM output port on the right side (centered vertically)
         ports.append(QPointF(120, 40));
+    } else {
+        // Detailed view - show all output ports
+        for (int i = 0; i < m_info.outputs.size(); ++i) {
+            int y = LABEL_HEIGHT + PADDING + i * PORT_SPACING;
+            QPointF center(boundingRect().width() - PADDING, y);
+            ports.append(center);
+        }
     }
     return ports;
 }
 
 QPointF ModuleGraphicsItem::getPortAt(const QPointF& pos, bool& isInput) const
 {
-    if (!m_isRTLView) {
-        return QPointF();
-    }
-    
-    // Check input port
+    // Check input ports
     QList<QPointF> inputPorts = getInputPorts();
     for (const QPointF& port : inputPorts) {
+        qreal detectionRadius = m_isRTLView ? TLM_PORT_DETECTION_RADIUS : PORT_RADIUS + 5;
         qreal distance = qSqrt(qPow(pos.x() - port.x(), 2) + qPow(pos.y() - port.y(), 2));
-        if (distance < TLM_PORT_DETECTION_RADIUS) {
+        if (distance < detectionRadius) {
             isInput = true;
             return port;
         }
     }
     
-    // Check output port
+    // Check output ports
     QList<QPointF> outputPorts = getOutputPorts();
     for (const QPointF& port : outputPorts) {
+        qreal detectionRadius = m_isRTLView ? TLM_PORT_DETECTION_RADIUS : PORT_RADIUS + 5;
         qreal distance = qSqrt(qPow(pos.x() - port.x(), 2) + qPow(pos.y() - port.y(), 2));
-        if (distance < TLM_PORT_DETECTION_RADIUS) {
+        if (distance < detectionRadius) {
             isInput = false;
             return port;
         }
@@ -367,10 +387,6 @@ QPointF ModuleGraphicsItem::getPortAt(const QPointF& pos, bool& isInput) const
 
 bool ModuleGraphicsItem::isNearPort(const QPointF& pos) const
 {
-    if (!m_isRTLView) {
-        return false;
-    }
-    
     bool isInput;
     QPointF port = getPortAt(pos, isInput);
     return !port.isNull();
@@ -505,5 +521,114 @@ QVariant ModuleGraphicsItem::itemChange(GraphicsItemChange change, const QVarian
         }
     }
     return QGraphicsItem::itemChange(change, value);
+}
+
+void ModuleGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
+{
+    QMenu menu;
+    
+    // Style the menu with Tajawal font for Arabic support
+    menu.setStyleSheet("QMenu { font-family: 'Tajawal'; font-size: 10pt; }"
+                      "QMenu::item:selected { background-color: #637AB9; }");
+    
+    // Add "Edit Ports" action
+    QAction* editPortsAction = menu.addAction("Edit Ports");
+    editPortsAction->setToolTip("Customize the number of inputs and outputs for this module");
+    
+    // Add "Toggle View" action
+    QAction* toggleViewAction = menu.addAction(m_isRTLView ? "Show Detailed View" : "Show RTL View");
+    toggleViewAction->setToolTip(m_isRTLView ? "Switch to detailed port view" : "Switch to compact RTL view");
+    
+    // Add separator
+    menu.addSeparator();
+    
+    // Add "Properties" action
+    QAction* propertiesAction = menu.addAction("Properties");
+    propertiesAction->setToolTip("View module properties and information");
+    
+    // Show menu at cursor position
+    QAction* selectedAction = menu.exec(event->screenPos());
+    
+    if (selectedAction == editPortsAction) {
+        // Open port editor dialog
+        PortEditorDialog* dialog = new PortEditorDialog(m_info, nullptr);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        
+        if (dialog->exec() == QDialog::Accepted) {
+            // Update module info with new port configuration
+            ModuleInfo newInfo = dialog->getUpdatedModuleInfo();
+            updateModuleInfo(newInfo);
+        }
+    } else if (selectedAction == toggleViewAction) {
+        // Toggle between RTL and detailed view
+        setRTLView(!m_isRTLView);
+    } else if (selectedAction == propertiesAction) {
+        // Open RTL detail window
+        RTLDetailWindow* detailWindow = new RTLDetailWindow(m_info);
+        detailWindow->setAttribute(Qt::WA_DeleteOnClose);
+        detailWindow->show();
+    }
+    
+    event->accept();
+}
+
+void ModuleGraphicsItem::updateModuleInfo(const ModuleInfo& newInfo)
+{
+    // Update the module info
+    m_info = newInfo;
+    
+    // Update the port manager with new port configuration
+    if (m_portManager) {
+        m_portManager->updatePortsFromModuleInfo(newInfo);
+    }
+    
+    // Update the component name if it changed
+    if (getName() != newInfo.name) {
+        setName(newInfo.name);
+    }
+    
+    // Calculate new component size based on port count (for detailed view)
+    if (!m_isRTLView) {
+        int maxPorts = qMax(newInfo.inputs.size(), newInfo.outputs.size());
+        qreal minHeight = qMax(40.0, maxPorts * 20.0 + 20.0); // 20px per port + 20px padding
+        qreal minWidth = qMax(50.0, 80.0); // Minimum width
+        
+        // Get current size using public method
+        QSizeF currentSize = getSize();
+        qreal currentWidth = currentSize.width();
+        qreal currentHeight = currentSize.height();
+        
+        // Resize component if needed to accommodate ports
+        if (currentHeight < minHeight || currentWidth < minWidth) {
+            qreal newWidth = qMax(currentWidth, minWidth);
+            qreal newHeight = qMax(currentHeight, minHeight);
+            
+            qDebug() << "📏 Resizing module to accommodate ports:" 
+                     << "| Old size:" << currentWidth << "x" << currentHeight
+                     << "| New size:" << newWidth << "x" << newHeight;
+            
+            setSize(newWidth, newHeight);
+        }
+    }
+    
+    // Update persistence with new port configuration
+    PersistenceManager& pm = PersistenceManager::instance();
+    QString moduleName = pm.getRTLModuleName(this);
+    if (!moduleName.isEmpty()) {
+        pm.updateRTLModulePorts(moduleName, newInfo.inputs, newInfo.outputs);
+    }
+    
+    // Force a geometry update to recalculate bounding rect
+    prepareGeometryChange();
+    
+    // Update the display
+    update();
+    
+    // Update any connected wires
+    updateWires();
+    
+    qDebug() << "Module info updated for:" << newInfo.name 
+             << "| Inputs:" << newInfo.inputs.size() 
+             << "| Outputs:" << newInfo.outputs.size();
 }
 

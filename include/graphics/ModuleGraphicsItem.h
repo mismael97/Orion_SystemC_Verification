@@ -67,6 +67,14 @@ public:
      * @return True if in RTL view mode, false otherwise
      */
     bool isRTLView() const;
+    
+    /**
+     * @brief Update module information
+     * @param newInfo New module information
+     * 
+     * Updates the module's port configuration and refreshes the display.
+     */
+    void updateModuleInfo(const ModuleInfo& newInfo);
 
     /**
      * @brief Get the bounding rectangle of the module
@@ -210,6 +218,15 @@ protected:
      * or selection state changes.
      */
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
+    
+    /**
+     * @brief Handle context menu event
+     * @param event Context menu event details
+     * 
+     * Shows a context menu with options for editing module properties,
+     * including port configuration.
+     */
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
 private:
     ModuleInfo m_info;              ///< Module information (name, ports, etc.)

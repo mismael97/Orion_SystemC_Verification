@@ -23,11 +23,13 @@ class ComponentPreviewWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ComponentPreviewWidget(const QString& componentName, QWidget* parent = nullptr);
+    explicit ComponentPreviewWidget(const QString& componentName, const QString& description = "", QWidget* parent = nullptr);
     ~ComponentPreviewWidget();
 
     void setComponentName(const QString& name);
+    void setDescription(const QString& description);
     QString getComponentName() const { return m_componentName; }
+    QString getDescription() const { return m_description; }
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -41,6 +43,7 @@ private:
     QSize calculateOptimalSize() const;
 
     QString m_componentName;
+    QString m_description;
     
     // Component rendering
     std::unique_ptr<ComponentRenderer> m_renderer;

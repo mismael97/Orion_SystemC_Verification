@@ -125,6 +125,7 @@ private:
     QGraphicsItem* m_wireSourceItem = nullptr; // Can be either ReadyComponent or Module
     QPointF m_wireSourcePort;
     bool m_wireSourceIsModule = false;
+    bool m_wireSourceIsInput = false;  // Whether the source port is an input or output
     WireGraphicsItem* m_temporaryWire = nullptr;
     
     // Selection rectangle

@@ -94,6 +94,7 @@ public:
     // RTL Module persistence
     void saveRTLModulePlacement(const QString& moduleName, const QString& filePath, const QPointF& position);
     void updateRTLModulePosition(const QString& moduleName, const QPointF& position);
+    void updateRTLModulePorts(const QString& moduleName, const QList<Port>& inputs, const QList<Port>& outputs);
     void removeRTLModulePlacement(const QString& moduleName);
     bool loadRTLModules(QGraphicsScene* scene);
     

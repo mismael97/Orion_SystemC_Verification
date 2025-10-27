@@ -51,7 +51,7 @@
 			{
 				"command" : 3,
 				"file" : 1,
-				"line" : 131,
+				"line" : 135,
 				"parent" : 0
 			},
 			{
@@ -75,7 +75,7 @@
 			{
 				"command" : 4,
 				"file" : 1,
-				"line" : 143,
+				"line" : 147,
 				"parent" : 0
 			},
 			{
@@ -271,7 +271,7 @@
 			{
 				"command" : 10,
 				"file" : 1,
-				"line" : 137,
+				"line" : 141,
 				"parent" : 0
 			}
 		]
@@ -431,18 +431,20 @@
 				80,
 				82,
 				84,
-				88
+				86,
+				88,
+				92
 			]
 		}
 	],
 	"dependencies" : 
 	[
 		{
-			"id" : "SCV_Project_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
-		},
-		{
 			"backtrace" : 0,
 			"id" : "SCV_Project_autogen::@6890427a1f51a3e7e1df"
+		},
+		{
+			"id" : "SCV_Project_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
 		}
 	],
 	"id" : "SCV_Project::@6890427a1f51a3e7e1df",
@@ -581,7 +583,9 @@
 				80,
 				82,
 				84,
-				88
+				86,
+				88,
+				92
 			]
 		},
 		{
@@ -636,7 +640,9 @@
 				81,
 				83,
 				85,
-				86
+				87,
+				89,
+				90
 			]
 		},
 		{
@@ -650,15 +656,15 @@
 			"name" : "",
 			"sourceIndexes" : 
 			[
-				87
+				91
 			]
 		},
 		{
 			"name" : "CMake Rules",
 			"sourceIndexes" : 
 			[
-				89,
-				90
+				93,
+				94
 			]
 		}
 	],
@@ -910,6 +916,17 @@
 		{
 			"backtrace" : 4,
 			"compileGroupIndex" : 0,
+			"path" : "src/ui/widgets/PortEditorDialog.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 4,
+			"path" : "include/ui/widgets/PortEditorDialog.h",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 4,
+			"compileGroupIndex" : 0,
 			"path" : "src/scene/SchematicScene.cpp",
 			"sourceGroupIndex" : 0
 		},
@@ -1081,6 +1098,17 @@
 		{
 			"backtrace" : 4,
 			"path" : "include/parsers/ComponentPortParser.h",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 4,
+			"compileGroupIndex" : 0,
+			"path" : "src/parsers/ComponentFileManager.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 4,
+			"path" : "include/parsers/ComponentFileManager.h",
 			"sourceGroupIndex" : 2
 		},
 		{

@@ -9,10 +9,41 @@ ComponentPortManager::ComponentPortManager(const QString& componentName, qreal w
     : m_componentName(componentName)
     , m_width(width)
     , m_height(height)
-    , m_useDynamicPorts(false)
-    , m_dynamicInputCount(0)
-    , m_dynamicOutputCount(0)
+    , m_useDynamicPorts(true)  // Enable dynamic ports by default
+    , m_dynamicInputCount(0)   // Will be set based on component type
+    , m_dynamicOutputCount(0)  // Will be set based on component type
 {
+    // Set specific port counts for each component type
+    if (componentName == "Stimuli") {
+        m_dynamicInputCount = 0;   // 0 inputs
+        m_dynamicOutputCount = 1;  // 1 output
+    } else if (componentName == "Stimuler") {
+        m_dynamicInputCount = 1;   // 1 input
+        m_dynamicOutputCount = 1;  // 1 output
+    } else if (componentName == "Driver") {
+        m_dynamicInputCount = 1;   // 1 input
+        m_dynamicOutputCount = 2;  // 2 outputs
+    } else if (componentName == "RM") {
+        m_dynamicInputCount = 1;   // 1 input
+        m_dynamicOutputCount = 1;  // 1 output
+    } else if (componentName == "Transactor") {
+        m_dynamicInputCount = 2;   // 2 inputs
+        m_dynamicOutputCount = 2;  // 2 outputs
+    } else if (componentName == "RTL") {
+        m_dynamicInputCount = 1;   // 1 input
+        m_dynamicOutputCount = 1;  // 1 output
+    } else if (componentName == "Compare") {
+        m_dynamicInputCount = 2;   // 2 inputs
+        m_dynamicOutputCount = 0;  // 0 outputs
+    } else {
+        // Default for unknown components
+        m_dynamicInputCount = 1;   // 1 input
+        m_dynamicOutputCount = 1;  // 1 output
+    }
+    
+    qDebug() << "🔌 ComponentPortManager initialized for" << m_componentName 
+             << "| Inputs:" << m_dynamicInputCount 
+             << "| Outputs:" << m_dynamicOutputCount;
 }
 
 void ComponentPortManager::updateDimensions(qreal width, qreal height)
@@ -39,15 +70,15 @@ int ComponentPortManager::getNumInputPorts() const
         return m_dynamicInputCount;
     }
     
-    // Otherwise fall back to hardcoded defaults
-    if (m_componentName == "Transactor") return 2;  // Transactor has 2 inputs (on right side)
-    if (m_componentName == "RM") return 1;
-    if (m_componentName == "Compare") return 2;
-    if (m_componentName == "Driver") return 1;
-    if (m_componentName == "Stimuler") return 1;
-    if (m_componentName == "Stimuli") return 0;
-    if (m_componentName == "RTL") return 1;  // RTL has 1 input
-    return 0;
+    // Otherwise fall back to hardcoded defaults (matching the constructor)
+    if (m_componentName == "Stimuli") return 0;     // 0 inputs
+    if (m_componentName == "Stimuler") return 1;    // 1 input
+    if (m_componentName == "Driver") return 1;      // 1 input
+    if (m_componentName == "RM") return 1;          // 1 input
+    if (m_componentName == "Transactor") return 2;  // 2 inputs
+    if (m_componentName == "RTL") return 1;         // 1 input
+    if (m_componentName == "Compare") return 2;     // 2 inputs
+    return 1; // Default for unknown components
 }
 
 int ComponentPortManager::getNumOutputPorts() const
@@ -57,15 +88,15 @@ int ComponentPortManager::getNumOutputPorts() const
         return m_dynamicOutputCount;
     }
     
-    // Otherwise fall back to hardcoded defaults
-    if (m_componentName == "Transactor") return 1;  // Transactor has 1 output (on right side)
-    if (m_componentName == "RM") return 1;
-    if (m_componentName == "Compare") return 0;
-    if (m_componentName == "Driver") return 2;
-    if (m_componentName == "Stimuler") return 1;
-    if (m_componentName == "Stimuli") return 1;
-    if (m_componentName == "RTL") return 1;  // RTL has 1 output
-    return 0;
+    // Otherwise fall back to hardcoded defaults (matching the constructor)
+    if (m_componentName == "Stimuli") return 1;     // 1 output
+    if (m_componentName == "Stimuler") return 1;    // 1 output
+    if (m_componentName == "Driver") return 2;      // 2 outputs
+    if (m_componentName == "RM") return 1;          // 1 output
+    if (m_componentName == "Transactor") return 2;  // 2 outputs
+    if (m_componentName == "RTL") return 1;         // 1 output
+    if (m_componentName == "Compare") return 0;     // 0 outputs
+    return 1; // Default for unknown components
 }
 
 QList<QPointF> ComponentPortManager::getInputPorts() const
@@ -73,15 +104,15 @@ QList<QPointF> ComponentPortManager::getInputPorts() const
     QList<QPointF> ports;
     int numInputs = getNumInputPorts();
     
+    qDebug() << "🔌 ComponentPortManager::getInputPorts for" << m_componentName 
+             << "| Count:" << numInputs 
+             << "| Dynamic:" << m_useDynamicPorts
+             << "| Size:" << m_width << "x" << m_height;
+    
     // RTL components now use standard port positioning like other components
     
-    // Special case for Transactor: inputs on RIGHT side (below output)
-    if (m_componentName == "Transactor" && numInputs > 0) {
-        // Position inputs at 2/4 and 3/4 height (below the output at 1/4)
-        ports.append(QPointF(m_width, m_height * 2.0 / 4.0));  // First input
-        ports.append(QPointF(m_width, m_height * 3.0 / 4.0));  // Second input
-        return ports;
-    }
+    // All components now follow standard positioning: inputs on LEFT side
+    // (Removed special case for Transactor to maintain consistency)
     
     // Standard case: distribute inputs evenly on the left
     if (numInputs > 0) {
@@ -89,6 +120,7 @@ QList<QPointF> ComponentPortManager::getInputPorts() const
         for (int i = 0; i < numInputs; ++i) {
             ports.append(QPointF(0, portSpacing * (i + 1)));
         }
+        qDebug() << "🔌 Standard input ports:" << ports;
     }
     
     return ports;
@@ -99,14 +131,15 @@ QList<QPointF> ComponentPortManager::getOutputPorts() const
     QList<QPointF> ports;
     int numOutputs = getNumOutputPorts();
     
+    qDebug() << "🔌 ComponentPortManager::getOutputPorts for" << m_componentName 
+             << "| Count:" << numOutputs 
+             << "| Dynamic:" << m_useDynamicPorts
+             << "| Size:" << m_width << "x" << m_height;
+    
     // RTL components now use standard port positioning like other components
     
-    // Special case for Transactor: output on RIGHT side (at top, 1/4 height)
-    if (m_componentName == "Transactor") {
-        // Output at 1/4 height (top position)
-        ports.append(QPointF(m_width, m_height * 1.0 / 4.0));
-        return ports;
-    }
+    // All components now follow standard positioning: outputs on RIGHT side
+    // (Removed special case for Transactor to maintain consistency)
     
     // Standard case: outputs on the right
     if (numOutputs > 0) {
@@ -114,6 +147,7 @@ QList<QPointF> ComponentPortManager::getOutputPorts() const
         for (int i = 0; i < numOutputs; ++i) {
             ports.append(QPointF(m_width, portSpacing * (i + 1)));
         }
+        qDebug() << "🔌 Standard output ports:" << ports;
     }
     
     return ports;

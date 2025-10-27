@@ -48,6 +48,10 @@ public:
     void updatePortsFromModuleInfo(const ModuleInfo& moduleInfo);
     bool hasDynamicPorts() const { return m_useDynamicPorts; }
     
+    // Port count accessors
+    int getNumInputPorts() const;
+    int getNumOutputPorts() const;
+    
     // Constants
     static constexpr int PORT_RADIUS = 6;
     static constexpr int PORT_DETECTION_RADIUS = 15;
@@ -62,10 +66,6 @@ private:
     bool m_useDynamicPorts;
     int m_dynamicInputCount;
     int m_dynamicOutputCount;
-    
-    // Helper methods
-    int getNumInputPorts() const;
-    int getNumOutputPorts() const;
 };
 
 #endif // COMPONENTPORTMANAGER_H

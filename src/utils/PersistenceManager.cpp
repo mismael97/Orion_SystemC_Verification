@@ -369,6 +369,13 @@ void PersistenceManager::updateRTLModulePosition(const QString& moduleName, cons
     }
 }
 
+void PersistenceManager::updateRTLModulePorts(const QString& moduleName, const QList<Port>& inputs, const QList<Port>& outputs)
+{
+    if (m_rtlModulePersistence) {
+        m_rtlModulePersistence->updateRTLModulePorts(moduleName, inputs, outputs);
+    }
+}
+
 void PersistenceManager::removeRTLModulePlacement(const QString& moduleName)
 {
     if (m_rtlModulePersistence) {

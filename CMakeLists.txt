@@ -70,6 +70,8 @@ set(PROJECT_SOURCES
     include/ui/widgets/ComponentMetadataEditor.h
     src/ui/widgets/ComponentPropertiesDialog.cpp
     include/ui/widgets/ComponentPropertiesDialog.h
+    src/ui/widgets/PortEditorDialog.cpp
+    include/ui/widgets/PortEditorDialog.h
     
     # Scene components
     src/scene/SchematicScene.cpp
