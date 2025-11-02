@@ -531,10 +531,6 @@ void ModuleGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     menu.setStyleSheet("QMenu { font-family: 'Tajawal'; font-size: 10pt; }"
                       "QMenu::item:selected { background-color: #637AB9; }");
     
-    // Add "Edit Ports" action
-    QAction* editPortsAction = menu.addAction("Edit Ports");
-    editPortsAction->setToolTip("Customize the number of inputs and outputs for this module");
-    
     // Add "Toggle View" action
     QAction* toggleViewAction = menu.addAction(m_isRTLView ? "Show Detailed View" : "Show RTL View");
     toggleViewAction->setToolTip(m_isRTLView ? "Switch to detailed port view" : "Switch to compact RTL view");
@@ -549,17 +545,7 @@ void ModuleGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
     // Show menu at cursor position
     QAction* selectedAction = menu.exec(event->screenPos());
     
-    if (selectedAction == editPortsAction) {
-        // Open port editor dialog
-        PortEditorDialog* dialog = new PortEditorDialog(m_info, nullptr);
-        dialog->setAttribute(Qt::WA_DeleteOnClose);
-        
-        if (dialog->exec() == QDialog::Accepted) {
-            // Update module info with new port configuration
-            ModuleInfo newInfo = dialog->getUpdatedModuleInfo();
-            updateModuleInfo(newInfo);
-        }
-    } else if (selectedAction == toggleViewAction) {
+    if (selectedAction == toggleViewAction) {
         // Toggle between RTL and detailed view
         setRTLView(!m_isRTLView);
     } else if (selectedAction == propertiesAction) {

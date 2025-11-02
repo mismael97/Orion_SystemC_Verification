@@ -266,9 +266,6 @@ void ReadyComponentGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent
     QAction* editAction = menu.addAction("Edit");
     editAction->setIcon(QIcon());  // You can add icons if you have them
     
-    QAction* editPortsAction = menu.addAction("Edit Ports");
-    editPortsAction->setToolTip("Customize the number of inputs and outputs for this component");
-    
     QAction* changeColorAction = menu.addAction("Change Color");
     
     // Show menu at cursor position
@@ -276,8 +273,6 @@ void ReadyComponentGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent
     
     if (selectedAction == editAction) {
         openCodeEditor();
-    } else if (selectedAction == editPortsAction) {
-        openPortEditor();
     } else if (selectedAction == changeColorAction) {
         changeComponentColor();
     }
