@@ -373,6 +373,15 @@ bool ComponentPersistence::loadComponentsFromDirectory(QGraphicsScene* scene, Pe
             restoreComponentProperties(component, metadata["properties"].toObject());
         }
         
+        // Restore connected file path if present
+        if (metadata.contains("connectedFilePath")) {
+            QString connectedFilePath = metadata["connectedFilePath"].toString();
+            if (!connectedFilePath.isEmpty()) {
+                component->setConnectedFilePath(connectedFilePath);
+                qDebug() << "🔗 Restored connected file path for component:" << id << "| Path:" << connectedFilePath;
+            }
+        }
+        
         scene->addItem(component);
         
         // Register with PersistenceManager

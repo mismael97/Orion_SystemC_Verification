@@ -53,6 +53,8 @@ set(PROJECT_SOURCES
     include/ui/widgets/MinimapWidget.h
     src/ui/widgets/VerticalToolbar.cpp
     include/ui/widgets/VerticalToolbar.h
+    src/ui/widgets/ControlButtonsWidget.cpp
+    include/ui/widgets/ControlButtonsWidget.h
     src/ui/widgets/EditComponentWidget.cpp
     include/ui/widgets/EditComponentWidget.h
     src/ui/widgets/ComponentLibraryWidget.cpp

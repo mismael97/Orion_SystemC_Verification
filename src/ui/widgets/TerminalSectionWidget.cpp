@@ -68,7 +68,10 @@ void TerminalSession::startTerminal()
 {
     if (!m_process) {
         m_process = new QProcess(this);
-        setupShell();
+        // Only setup shell if not already configured
+        if (m_shellPath.isEmpty()) {
+            setupShell();
+        }
         
         // Connect process signals
         connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
@@ -92,9 +95,9 @@ void TerminalSession::startTerminal()
         if (m_shellPath.contains("bash.exe")) {
             // Git Bash arguments for interactive mode
             arguments << "--login" << "-i";
-        } else if (m_shellPath.contains("wsl.exe")) {
-            // WSL arguments for interactive mode
-            arguments << "--exec" << "bash" << "-l";
+        } else if (m_shellPath.contains("wsl.exe") || m_shellPath == "wsl.exe") {
+            // WSL arguments for interactive mode - use Ubuntu distribution
+            arguments << "-d" << "Ubuntu" << "--exec" << "bash" << "-l";
         } else if (m_shellPath.contains("powershell")) {
             // PowerShell arguments for interactive mode
             arguments << "-NoExit" << "-Command" << "& {Write-Host 'PowerShell Ready' -ForegroundColor Green}";
@@ -357,6 +360,16 @@ void TerminalSession::sendInput(const QString& input)
 {
     if (m_process && m_process->state() == QProcess::Running) {
         m_process->write(input.toUtf8());
+    }
+}
+
+void TerminalSession::clearTerminal()
+{
+    if (m_terminal) {
+        m_terminal->setReadOnly(false);
+        m_terminal->clear();
+        m_terminal->setReadOnly(true);
+        writePrompt();
     }
 }
 
@@ -746,6 +759,17 @@ void TerminalSession::switchShell(const QString& shellType)
     // Close current terminal if running
     if (m_process && m_process->state() == QProcess::Running) {
         closeTerminal();
+        // Wait a bit for process to fully close
+        if (m_process) {
+            m_process->waitForFinished(1000);
+        }
+    }
+    
+    // Clear terminal content
+    if (m_terminal) {
+        m_terminal->setReadOnly(false);
+        m_terminal->clear();
+        m_terminal->setReadOnly(true);
     }
     
     // Set new shell based on type
@@ -786,7 +810,9 @@ void TerminalSession::switchShell(const QString& shellType)
     }
     
     writeToTerminal(QString("Switched to %1\n").arg(shellType));
-    writePrompt();
+    
+    // Start the new shell
+    startTerminal();
 }
 
 QStringList TerminalSession::getAvailableShells() const

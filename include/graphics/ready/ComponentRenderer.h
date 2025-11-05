@@ -36,6 +36,10 @@ public:
     void drawPorts(QPainter* painter, const ComponentPortManager* portManager,
                    const QList<WireGraphicsItem*>& wires, qreal offset);
     
+    // Connect icon rendering
+    void drawConnectIcon(QPainter* painter, qreal width, qreal height, qreal portRadius,
+                        bool isConnected, const QPointF& iconPos = QPointF());
+    
     // Color management
     void setDefaultColors(const QColor& background, const QColor& border, const QColor& neonGlow);
     

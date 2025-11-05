@@ -24,6 +24,7 @@
 #include <QDir>
 #include <QDebug>
 #include <QGraphicsView>
+#include <QFileDialog>
 
 ReadyComponentGraphicsItem::ReadyComponentGraphicsItem(const QString& name, QGraphicsItem* parent)
     : QGraphicsItem(parent), m_name(name)
@@ -138,6 +139,9 @@ void ReadyComponentGraphicsItem::paint(QPainter* painter, const QStyleOptionGrap
     // Draw connection ports
     m_renderer->drawPorts(painter, m_portManager.get(), m_wireManager->getWires(), portRadius);
     
+    // Draw connect icon at bottom right corner
+    m_renderer->drawConnectIcon(painter, m_width, m_height, portRadius, isConnected());
+    
     // Draw resize handle when selected
     if (isSelected()) {
         m_resizeHandler->drawResizeHandle(painter, m_width, m_height, portRadius);
@@ -149,6 +153,14 @@ void ReadyComponentGraphicsItem::mousePressEvent(QGraphicsSceneMouseEvent* event
     if (event->button() == Qt::LeftButton) {
         qreal portRadius = getPortRadius();
         QPointF adjustedPos = event->pos() - QPointF(portRadius, portRadius);
+        
+        // Check if clicking on connect icon
+        QRectF iconRect = getConnectIconRect();
+        if (iconRect.contains(event->pos())) {
+            openConnectFileDialog();
+            event->accept();
+            return;
+        }
         
         // Check if clicking on resize handle
         if (isSelected() && m_resizeHandler->isInResizeHandle(adjustedPos, m_width, m_height)) {
@@ -430,6 +442,19 @@ void ReadyComponentGraphicsItem::hoverMoveEvent(QGraphicsSceneHoverEvent* event)
     qreal portRadius = getPortRadius();
     QPointF adjustedPos = event->pos() - QPointF(portRadius, portRadius);
     
+    // Check if hovering over connect icon
+    QRectF iconRect = getConnectIconRect();
+    if (iconRect.contains(event->pos())) {
+        setCursor(Qt::PointingHandCursor);
+        if (isConnected()) {
+            setToolTip(QString("Connected to: %1\nClick to change connection").arg(m_connectedFilePath));
+        } else {
+            setToolTip("Click to connect a file");
+        }
+        QGraphicsItem::hoverMoveEvent(event);
+        return;
+    }
+    
     QCursor cursor = m_resizeHandler->getCursorForPosition(adjustedPos, isSelected(), m_width, m_height);
     if (cursor.shape() == Qt::SizeFDiagCursor) {
         setCursor(cursor);
@@ -662,5 +687,90 @@ void ReadyComponentGraphicsItem::updateComponentPorts(const ModuleInfo& newInfo)
     }
     
     qDebug() << "✅ Component ports updated successfully for:" << getName();
+}
+
+QRectF ReadyComponentGraphicsItem::getConnectIconRect() const
+{
+    qreal portRadius = getPortRadius();
+    const qreal iconSize = 16.0;
+    const qreal iconPadding = 4.0;
+    
+    QPointF pos(portRadius + m_width - iconSize - iconPadding, 
+                portRadius + m_height - iconSize - iconPadding);
+    
+    return QRectF(pos.x(), pos.y(), iconSize, iconSize);
+}
+
+void ReadyComponentGraphicsItem::setConnectedFilePath(const QString& filePath)
+{
+    if (m_connectedFilePath != filePath) {
+        m_connectedFilePath = filePath;
+        update(); // Repaint to show updated icon state
+        
+        // Save to persistence
+        try {
+            PersistenceManager& pm = PersistenceManager::instance();
+            QString componentId = pm.getComponentId(this);
+            if (!componentId.isEmpty()) {
+                // Get or create metadata
+                QJsonObject metadata = pm.getComponentMetadata(componentId);
+                
+                // If metadata is empty, create basic structure
+                if (metadata.isEmpty()) {
+                    metadata["id"] = componentId;
+                    metadata["type"] = m_name;
+                }
+                
+                // Update metadata with connected file path
+                metadata["connectedFilePath"] = filePath;
+                pm.updateComponentMetadata(componentId, metadata);
+                qDebug() << "💾 Connected file path saved to meta.json for component:" << componentId 
+                         << "| Path:" << filePath;
+            }
+        } catch (const std::exception& e) {
+            qWarning() << "⚠️ Exception during connected file path update:" << e.what();
+        } catch (...) {
+            qWarning() << "⚠️ Unknown exception during connected file path update";
+        }
+    }
+}
+
+void ReadyComponentGraphicsItem::openConnectFileDialog()
+{
+    qDebug() << "🔗 Opening file dialog to connect component:" << getName();
+    
+    // Get component ID
+    PersistenceManager& pm = PersistenceManager::instance();
+    QString componentId = pm.getComponentId(this);
+    
+    // Check if working directory is set
+    QString workingDir = pm.getWorkingDirectory();
+    if (workingDir.isEmpty()) {
+        QMessageBox::warning(nullptr, "No Project Loaded",
+            QString("Please load or create a project first.\n\n"
+                    "Use: File → Open RTL Directory"));
+        qWarning() << "No working directory set - cannot connect file";
+        return;
+    }
+    
+    // Open file dialog
+    QString selectedFile = QFileDialog::getOpenFileName(
+        nullptr,
+        "Select File to Connect",
+        workingDir,
+        "All Files (*.*);;Verilog Files (*.v);;SystemVerilog Files (*.sv);;C++ Files (*.cpp *.h);;Header Files (*.h)"
+    );
+    
+    if (!selectedFile.isEmpty()) {
+        // Set the connected file path
+        setConnectedFilePath(selectedFile);
+        
+        QMessageBox::information(nullptr, "File Connected",
+            QString("Component '%1' is now connected to:\n\n%2").arg(getName()).arg(selectedFile));
+        
+        qDebug() << "✅ Component connected to file:" << selectedFile;
+    } else {
+        qDebug() << "File selection cancelled";
+    }
 }
 

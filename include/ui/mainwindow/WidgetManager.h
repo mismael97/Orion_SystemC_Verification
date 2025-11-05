@@ -8,6 +8,7 @@ class MainWindow;
 class MinimapWidget;
 class VerticalToolbar;
 class EditComponentWidget;
+class ControlButtonsWidget;
 class QGraphicsView;
 
 class WidgetManager : public QObject
@@ -20,6 +21,7 @@ public:
     void setupMinimap();
     void setupSchematicOverlays();
     void setupEditComponentWidget();
+    void setupControlButtons();
     void updateMinimapPosition();
     void updateSchematicOverlaysPosition();
     void setCurrentRtlDirectory(const QString& directory);
@@ -27,6 +29,7 @@ public:
     MinimapWidget* minimap() const { return m_minimap; }
     VerticalToolbar* verticalToolbar() const { return m_verticalToolbar; }
     EditComponentWidget* editComponentWidget() const { return m_editComponentWidget; }
+    ControlButtonsWidget* controlButtons() const { return m_controlButtons; }
 
 private:
     MainWindow* m_mainWindow;
@@ -34,6 +37,7 @@ private:
     MinimapWidget* m_minimap;
     VerticalToolbar* m_verticalToolbar;
     EditComponentWidget* m_editComponentWidget;
+    ControlButtonsWidget* m_controlButtons;
     QString m_currentRtlDirectory;
 };
 

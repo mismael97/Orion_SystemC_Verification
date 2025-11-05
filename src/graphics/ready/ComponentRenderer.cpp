@@ -227,3 +227,61 @@ void ComponentRenderer::drawPorts(QPainter* painter, const ComponentPortManager*
     }
 }
 
+void ComponentRenderer::drawConnectIcon(QPainter* painter, qreal width, qreal height, qreal portRadius,
+                                       bool isConnected, const QPointF& iconPos)
+{
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    
+    // Icon size
+    const qreal iconSize = 16.0;
+    const qreal iconPadding = 4.0;
+    
+    // Calculate position at bottom right corner
+    QPointF pos;
+    if (iconPos.isNull()) {
+        pos = QPointF(portRadius + width - iconSize - iconPadding, 
+                     portRadius + height - iconSize - iconPadding);
+    } else {
+        pos = iconPos;
+    }
+    
+    QRectF iconRect(pos.x(), pos.y(), iconSize, iconSize);
+    
+    // Draw icon background
+    QColor bgColor = isConnected ? QColor(76, 175, 80) : QColor(200, 200, 200);
+    QColor borderColor = isConnected ? QColor(56, 142, 60) : QColor(150, 150, 150);
+    
+    painter->setPen(QPen(borderColor, 1.5));
+    painter->setBrush(bgColor);
+    painter->drawRoundedRect(iconRect, 3, 3);
+    
+    // Draw connection icon (link/chain symbol)
+    painter->setPen(QPen(isConnected ? Qt::white : QColor(100, 100, 100), 1.5));
+    painter->setBrush(Qt::NoBrush);
+    
+    // Draw link icon (two connected circles)
+    qreal centerX = iconRect.center().x();
+    qreal centerY = iconRect.center().y();
+    qreal circleRadius = 3.0;
+    qreal spacing = 2.0;
+    
+    // Left circle (centered to the left of center)
+    qreal leftCircleX = centerX - circleRadius - spacing/2;
+    QRectF leftCircle(leftCircleX - circleRadius, 
+                     centerY - circleRadius, 
+                     circleRadius * 2, circleRadius * 2);
+    
+    // Right circle (centered to the right of center)
+    qreal rightCircleX = centerX + circleRadius + spacing/2;
+    QRectF rightCircle(rightCircleX - circleRadius, 
+                      centerY - circleRadius, 
+                      circleRadius * 2, circleRadius * 2);
+    
+    painter->drawEllipse(leftCircle);
+    painter->drawEllipse(rightCircle);
+    
+    // Draw connecting line between circles
+    painter->drawLine(leftCircle.center().x() + circleRadius, centerY, 
+                     rightCircle.center().x() - circleRadius, centerY);
+}
+

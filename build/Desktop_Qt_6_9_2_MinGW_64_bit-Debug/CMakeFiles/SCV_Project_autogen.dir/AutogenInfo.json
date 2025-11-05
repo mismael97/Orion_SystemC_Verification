@@ -551,6 +551,12 @@
 			null
 		],
 		[
+			"C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/ControlButtonsWidget.h",
+			"MU",
+			"S2YPLG5PUX/moc_ControlButtonsWidget.cpp",
+			null
+		],
+		[
 			"C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/EditComponentWidget.h",
 			"MU",
 			"S2YPLG5PUX/moc_EditComponentWidget.cpp",
@@ -841,6 +847,11 @@
 		],
 		[
 			"C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/ComponentPropertiesDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/ControlButtonsWidget.cpp",
 			"MU",
 			null
 		],

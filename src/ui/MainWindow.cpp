@@ -34,6 +34,8 @@
 
 #include "ui/widgets/dragdropgraphicsview.h"
 #include "ui/widgets/VerticalToolbar.h"
+#include "ui/widgets/ControlButtonsWidget.h"
+#include "ui/widgets/TerminalSectionWidget.h"
 #include "scene/SchematicScene.h"
 #include "parsers/SvParser.h"
 #include "parsers/ComponentPortParser.h"
@@ -110,6 +112,12 @@ MainWindow::MainWindow(QWidget *parent)
     
     // Setup file watcher for RTL changes
     setupFileWatcher();
+    
+    // Setup action buttons layout (before control buttons are added)
+    setupActionButtonsLayout();
+    
+    // Setup control buttons widget (before managers to ensure it's ready)
+    setupControlButtonsWidget();
     
     // Setup all managers
     setupManagers();
@@ -248,6 +256,267 @@ void MainWindow::setupResizableEditorPanel()
     qDebug() << "✅ Resizable editor panel setup complete";
     qDebug() << "   File Explorer Container:" << fileExplorerContainer;
     qDebug() << "   Splitter sizes:" << mainHorizontalSplitter->sizes();
+}
+
+void MainWindow::setupActionButtonsLayout()
+{
+    // Find the action_buttons_layout (it's a QHBoxLayout based on the UI file)
+    QHBoxLayout* actionButtonsLayout = ui->action_buttons_layout;
+    if (!actionButtonsLayout) {
+        // Fallback: try to find it by name
+        actionButtonsLayout = findChild<QHBoxLayout*>("action_buttons_layout");
+    }
+    
+    if (!actionButtonsLayout) {
+        qWarning() << "action_buttons_layout not found - buttons will remain in horizontalLayout_3";
+        return;
+    }
+    
+    // Find horizontalLayout_3
+    QHBoxLayout* horizontalLayout = ui->horizontalLayout_3;
+    if (!horizontalLayout) {
+        qWarning() << "horizontalLayout_3 not found";
+        return;
+    }
+    
+    // Collect all push buttons from horizontalLayout_3
+    // We need to collect them first, then remove them (to avoid index issues)
+    QList<QPushButton*> actionButtons;
+    QList<QLayoutItem*> itemsToRemove;
+    
+    for (int i = 0; i < horizontalLayout->count(); ++i) {
+        QLayoutItem* item = horizontalLayout->itemAt(i);
+        if (item && item->widget()) {
+            QPushButton* button = qobject_cast<QPushButton*>(item->widget());
+            if (button) {
+                // Only collect buttons that are direct children (not part of ControlButtonsWidget)
+                // Check if button's parent is centralwidget (meaning it's a direct button)
+                QWidget* parent = button->parentWidget();
+                if (parent && parent == ui->centralwidget) {
+                    actionButtons.append(button);
+                    itemsToRemove.append(item);
+                }
+            }
+        }
+    }
+    
+    // Remove buttons from horizontalLayout_3 and add them to action_buttons_layout
+    for (QPushButton* button : actionButtons) {
+        horizontalLayout->removeWidget(button);
+        actionButtonsLayout->addWidget(button);
+        button->show(); // Make sure buttons are visible
+    }
+    
+    // Make sure the layout itself is visible
+    if (actionButtonsLayout->parentWidget()) {
+        actionButtonsLayout->parentWidget()->show();
+    }
+    
+    qDebug() << "✅ Action buttons moved to action_buttons_layout:" << actionButtons.size() << "buttons";
+    if (actionButtons.isEmpty()) {
+        qWarning() << "No action buttons found in horizontalLayout_3";
+        qDebug() << "   horizontalLayout_3 count:" << horizontalLayout->count();
+    }
+}
+
+void MainWindow::setupControlButtonsWidget()
+{
+    qDebug() << "🔧 Setting up control buttons widget...";
+    
+    // Find horizontalLayout_2 where control buttons should be placed
+    QHBoxLayout* layout = nullptr;
+    
+    // Try multiple ways to find the layout
+    layout = findChild<QHBoxLayout*>("horizontalLayout_2");
+    if (!layout) {
+        layout = ui->centralwidget->findChild<QHBoxLayout*>("horizontalLayout_2");
+    }
+    if (!layout) {
+        // Try to find it in the vertical layout structure
+        QVBoxLayout* mainLayout = ui->verticalLayout_2;
+        if (mainLayout) {
+            for (int i = 0; i < mainLayout->count(); ++i) {
+                QLayoutItem* item = mainLayout->itemAt(i);
+                if (item && item->layout()) {
+                    QHBoxLayout* hLayout = qobject_cast<QHBoxLayout*>(item->layout());
+                    if (hLayout && hLayout->objectName() == "horizontalLayout_2") {
+                        layout = hLayout;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (!layout) {
+        qWarning() << "⚠️ horizontalLayout_2 not found, creating fallback container";
+        
+        // Fallback: Create a new layout and add it to centralwidget
+        QWidget* containerWidget = new QWidget(ui->centralwidget);
+        containerWidget->setObjectName("controlButtonsContainer");
+        layout = new QHBoxLayout(containerWidget);
+        layout->setContentsMargins(5, 5, 5, 5);
+        layout->setSpacing(5);
+        
+        // Find verticalLayout_2 and add container widget
+        QVBoxLayout* mainLayout = ui->verticalLayout_2;
+        if (mainLayout) {
+            // Insert after horizontalLayout_3 (index 1) but before mainSplitter
+            mainLayout->insertWidget(1, containerWidget);
+            qDebug() << "   Created fallback container and inserted at index 1";
+        } else {
+            qWarning() << "   Could not find verticalLayout_2 to add container";
+            delete containerWidget;
+            return;
+        }
+    }
+    
+    qDebug() << "   Found layout:" << layout->objectName();
+    
+    // Create control buttons widget
+    QWidget* parentWidget = layout->parentWidget();
+    if (!parentWidget) {
+        parentWidget = ui->centralwidget;
+    }
+    
+    ControlButtonsWidget* controlButtons = new ControlButtonsWidget(parentWidget);
+    controlButtons->setObjectName("controlButtonsWidget");
+    
+    // Add spacer to push buttons to the right
+    layout->addStretch();
+    
+    // Add the control buttons widget to horizontalLayout_2
+    layout->addWidget(controlButtons);
+    
+    // Make sure everything is visible
+    controlButtons->show();
+    controlButtons->setVisible(true);
+    controlButtons->raise();
+    
+    if (parentWidget) {
+        parentWidget->show();
+        parentWidget->setVisible(true);
+    }
+    
+    if (layout->parentWidget()) {
+        layout->parentWidget()->show();
+        layout->parentWidget()->setVisible(true);
+    }
+    
+    // Connect button signals
+    connect(controlButtons, &ControlButtonsWidget::runClicked, this, [this]() {
+        qDebug() << "▶ Run button clicked - executing make verilate in WSL";
+        executeMakeVerilate();
+    });
+    
+    connect(controlButtons, &ControlButtonsWidget::stopClicked, this, [this]() {
+        qDebug() << "⏹ Stop button clicked - implement functionality";
+        // TODO: Implement stop functionality
+    });
+    
+    connect(controlButtons, &ControlButtonsWidget::pauseClicked, this, [this]() {
+        qDebug() << "⏸ Pause button clicked - implement functionality";
+        // TODO: Implement pause functionality
+    });
+    
+    qDebug() << "✅ Control buttons widget created and added to layout";
+    qDebug() << "   Widget size:" << controlButtons->size();
+    qDebug() << "   Widget visible:" << controlButtons->isVisible();
+    qDebug() << "   Layout parent:" << (layout->parentWidget() ? layout->parentWidget()->objectName() : "none");
+}
+
+void MainWindow::executeMakeVerilate()
+{
+    if (!m_terminalSection) {
+        qWarning() << "Terminal section not available";
+        return;
+    }
+    
+    // Show terminal section and switch to terminal tab
+    m_terminalSection->setVisible(true);
+    m_terminalSection->showTerminalTab();
+    
+    // Get terminal tab and current session
+    TerminalTab* terminalTab = m_terminalSection->terminalTab();
+    if (!terminalTab) {
+        qWarning() << "Terminal tab not available";
+        return;
+    }
+    
+    // Get or create a terminal session
+    TerminalSession* session = terminalTab->currentSession();
+    if (!session) {
+        // Create a new session if none exists
+        terminalTab->addNewSession();
+        session = terminalTab->currentSession();
+    }
+    
+    if (!session) {
+        qWarning() << "Could not get or create terminal session";
+        return;
+    }
+    
+    // Get current project directory
+    QString projectDir;
+    if (!currentRtlDirectory.isEmpty()) {
+        projectDir = currentRtlDirectory;
+    } else {
+        // Fallback to current working directory
+        projectDir = QDir::currentPath();
+    }
+    
+    // Convert Windows path to WSL path if needed
+    QString wslPath = projectDir;
+    if (QDir::separator() == '\\') {
+        // Windows path - convert to WSL format (C:\Users\... -> /mnt/c/Users/...)
+        QString tempPath = projectDir;
+        tempPath.replace('\\', '/');
+        if (tempPath.length() > 2 && tempPath.at(1) == ':') {
+            // Drive letter path (C:/Users/... -> /mnt/c/Users/...)
+            QChar driveLetter = tempPath.at(0).toLower();
+            wslPath = QString("/mnt/%1%2").arg(driveLetter).arg(tempPath.mid(2));
+        } else {
+            wslPath = tempPath;
+        }
+    }
+    
+    qDebug() << "Executing make verilate in WSL";
+    qDebug() << "Project directory (Windows):" << projectDir;
+    qDebug() << "Project directory (WSL):" << wslPath;
+    
+    // Check if WSL is available
+    QStringList availableShells = session->getAvailableShells();
+    if (!availableShells.contains("WSL")) {
+        qWarning() << "WSL not available";
+        QMessageBox::warning(this, "WSL Not Available", 
+                             "WSL (Windows Subsystem for Linux) is not available.\n"
+                             "Please install WSL and Ubuntu to use this feature.");
+        return;
+    }
+    
+    // Clear terminal and switch to WSL
+    // Clear terminal content first
+    session->clearTerminal();
+    
+    // Switch to WSL shell (this will close old terminal and start new one)
+    session->switchShell("WSL");
+    
+    // Wait for terminal to start, then execute command
+    QTimer::singleShot(2000, [session, wslPath]() {
+        if (!session->isActive()) {
+            // If still not active, try starting again
+            session->startTerminal();
+            QTimer::singleShot(1000, [session, wslPath]() {
+                // Execute cd and make verilate as a single command
+                QString command = QString("cd %1 && make verilate").arg(wslPath);
+                session->executeCommand(command);
+            });
+        } else {
+            // Execute cd and make verilate as a single command
+            QString command = QString("cd %1 && make verilate").arg(wslPath);
+            session->executeCommand(command);
+        }
+    });
 }
 
 void MainWindow::setupTerminalSection()
@@ -909,7 +1178,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
                 m_widgetManager->minimap()->updateViewportRect();
             }
             
-            // Also update schematic overlays position
+            // Also update schematic overlays position (includes control buttons)
             m_widgetManager->updateSchematicOverlaysPosition();
         }
     }

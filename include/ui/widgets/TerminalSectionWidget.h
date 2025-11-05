@@ -80,6 +80,7 @@ public:
     void sendInput(const QString& input);
     void setWorkingDirectory(const QString& dir);
     QString workingDirectory() const;
+    void clearTerminal();
     
     // Environment
     void setEnvironmentVariable(const QString& name, const QString& value);

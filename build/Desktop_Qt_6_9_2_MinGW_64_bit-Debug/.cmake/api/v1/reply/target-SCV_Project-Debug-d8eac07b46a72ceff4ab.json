@@ -440,11 +440,11 @@
 	"dependencies" : 
 	[
 		{
-			"backtrace" : 0,
-			"id" : "SCV_Project_autogen::@6890427a1f51a3e7e1df"
+			"id" : "SCV_Project_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
 		},
 		{
-			"id" : "SCV_Project_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
+			"backtrace" : 0,
+			"id" : "SCV_Project_autogen::@6890427a1f51a3e7e1df"
 		}
 	],
 	"id" : "SCV_Project::@6890427a1f51a3e7e1df",
@@ -828,6 +828,17 @@
 		{
 			"backtrace" : 4,
 			"compileGroupIndex" : 0,
+			"path" : "src/ui/widgets/ControlButtonsWidget.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 4,
+			"path" : "include/ui/widgets/ControlButtonsWidget.h",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 4,
+			"compileGroupIndex" : 0,
 			"path" : "src/ui/widgets/EditComponentWidget.cpp",
 			"sourceGroupIndex" : 0
 		},
@@ -1098,17 +1109,6 @@
 		{
 			"backtrace" : 4,
 			"path" : "include/parsers/ComponentPortParser.h",
-			"sourceGroupIndex" : 2
-		},
-		{
-			"backtrace" : 4,
-			"compileGroupIndex" : 0,
-			"path" : "src/parsers/ComponentFileManager.cpp",
-			"sourceGroupIndex" : 0
-		},
-		{
-			"backtrace" : 4,
-			"path" : "include/parsers/ComponentFileManager.h",
 			"sourceGroupIndex" : 2
 		},
 		{

@@ -137,6 +137,12 @@ public:
     // Additional getters for persistence
     QString getComponentType() const { return m_name; }
     QColor getColor() const { return m_hasCustomColor ? m_customColor : QColor(100, 150, 200); }
+    
+    // Connected file path management
+    QString getConnectedFilePath() const { return m_connectedFilePath; }
+    void setConnectedFilePath(const QString& filePath);
+    bool isConnected() const { return !m_connectedFilePath.isEmpty(); }
+    QRectF getConnectIconRect() const;
 
 signals:
     // Signals for persistence updates
@@ -169,6 +175,7 @@ private:
     qreal m_height;
     QColor m_customColor;
     bool m_hasCustomColor = false;
+    QString m_connectedFilePath; // File path that this component is connected to
     
     // Helper methods
     void openCodeEditor();
@@ -177,6 +184,7 @@ private:
     void updateComponentPorts(const ModuleInfo& newInfo);
     QList<Port> generatePorts(int count, const QString& prefix) const;
     qreal getPortRadius() const;
+    void openConnectFileDialog();
 };
 
 #endif // READYCOMPONENTGRAPHICSITEM_H

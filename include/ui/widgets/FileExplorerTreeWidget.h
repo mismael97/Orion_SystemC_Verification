@@ -16,6 +16,10 @@
 #include <QHeaderView>
 #include <QApplication>
 #include <QStyle>
+#include <QMouseEvent>
+#include <QKeyEvent>
+#include <QGradient>
+#include <QPolygon>
 
 class FileExplorerTreeWidget : public QTreeWidget
 {

@@ -122,9 +122,14 @@ private:
     void setupFileWatcher();
     void setupManagers();
     void setupResizableEditorPanel();
+    void setupActionButtonsLayout();
+    void setupControlButtonsWidget();
     void setupTerminalSection();
     void setupTerminalMenuActions();
     void loadProjectInternal(const QString& projectPath);
+    
+    // Control button actions
+    void executeMakeVerilate();
     
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;

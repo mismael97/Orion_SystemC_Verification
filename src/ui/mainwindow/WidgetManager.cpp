@@ -4,6 +4,7 @@
 #include "ui/widgets/MinimapWidget.h"
 #include "ui/widgets/VerticalToolbar.h"
 #include "ui/widgets/EditComponentWidget.h"
+#include "ui/widgets/ControlButtonsWidget.h"
 #include "utils/PersistenceManager.h"
 #include "scene/SchematicScene.h"
 #include <QGraphicsView>
@@ -12,6 +13,7 @@
 #include <QFont>
 #include <QDebug>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QSizePolicy>
 #include <QSplitter>
 
@@ -22,6 +24,7 @@ WidgetManager::WidgetManager(MainWindow* mainWindow, QGraphicsView* graphicsView
     , m_minimap(nullptr)
     , m_verticalToolbar(nullptr)
     , m_editComponentWidget(nullptr)
+    , m_controlButtons(nullptr)
 {
 }
 
@@ -126,6 +129,8 @@ void WidgetManager::updateSchematicOverlaysPosition()
     int toolbarY = padding;
     m_verticalToolbar->move(toolbarX, toolbarY);
     m_verticalToolbar->raise();
+    
+    // Control buttons are now in horizontalLayout_3, no need to update position
 }
 
 void WidgetManager::setCurrentRtlDirectory(const QString& directory)
@@ -190,5 +195,13 @@ void WidgetManager::setupEditComponentWidget()
     });
     
     qDebug() << "Edit component widget setup complete";
+}
+
+void WidgetManager::setupControlButtons()
+{
+    // Control buttons are now set up directly in MainWindow::setupControlButtonsWidget()
+    // This method is kept for backward compatibility but does nothing
+    // The actual setup is done in MainWindow to ensure proper timing and visibility
+    qDebug() << "setupControlButtons() called - control buttons are set up in MainWindow::setupControlButtonsWidget()";
 }
 

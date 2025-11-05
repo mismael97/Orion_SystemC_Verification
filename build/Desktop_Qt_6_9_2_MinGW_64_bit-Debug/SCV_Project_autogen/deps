@@ -189,6 +189,7 @@ SCV_Project_autogen/timestamp: \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QDrag \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QFileSystemModel \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QFont \
+	C:/Qt/6.9.2/mingw_64/include/QtGui/QGradient \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QIcon \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QKeyEvent \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QMouseEvent \
@@ -196,6 +197,7 @@ SCV_Project_autogen/timestamp: \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QPainterPath \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QPalette \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QPixmap \
+	C:/Qt/6.9.2/mingw_64/include/QtGui/QPolygon \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QResizeEvent \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QTransform \
 	C:/Qt/6.9.2/mingw_64/include/QtGui/QUndoStack \
@@ -826,6 +828,7 @@ SCV_Project_autogen/timestamp: \
 	C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/ComponentMetadataEditor.h \
 	C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/ComponentPreviewWidget.h \
 	C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/ComponentPropertiesDialog.h \
+	C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/ControlButtonsWidget.h \
 	C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/EditComponentWidget.h \
 	C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/FileExplorerTreeWidget.h \
 	C:/Users/HKhaled/Downloads/SCV_Project/include/ui/widgets/MinimapWidget.h \
@@ -870,6 +873,7 @@ SCV_Project_autogen/timestamp: \
 	C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/ComponentMetadataEditor.cpp \
 	C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/ComponentPreviewWidget.cpp \
 	C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/ComponentPropertiesDialog.cpp \
+	C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/ControlButtonsWidget.cpp \
 	C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/DragDropGraphicsView.cpp \
 	C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/EditComponentWidget.cpp \
 	C:/Users/HKhaled/Downloads/SCV_Project/src/ui/widgets/FileExplorerTreeWidget.cpp \

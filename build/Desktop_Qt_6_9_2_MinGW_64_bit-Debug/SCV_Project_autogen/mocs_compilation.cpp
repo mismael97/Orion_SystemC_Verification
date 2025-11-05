@@ -19,6 +19,7 @@
 #include "S2YPLG5PUX/moc_ComponentMetadataEditor.cpp"
 #include "S2YPLG5PUX/moc_ComponentPreviewWidget.cpp"
 #include "S2YPLG5PUX/moc_ComponentPropertiesDialog.cpp"
+#include "S2YPLG5PUX/moc_ControlButtonsWidget.cpp"
 #include "S2YPLG5PUX/moc_EditComponentWidget.cpp"
 #include "S2YPLG5PUX/moc_FileExplorerTreeWidget.cpp"
 #include "S2YPLG5PUX/moc_MinimapWidget.cpp"

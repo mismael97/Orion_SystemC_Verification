@@ -49,6 +49,7 @@ public:
     QPushButton *pushButton_9;
     QPushButton *pushButton_8;
     QPushButton *pushButton_10;
+    QHBoxLayout *action_buttons_layout;
     QSpacerItem *horizontalSpacer;
     QSplitter *mainSplitter;
     QWidget *topWidget;
@@ -140,11 +141,15 @@ public:
 
         horizontalLayout_3->addWidget(pushButton_10);
 
+        action_buttons_layout = new QHBoxLayout();
+        action_buttons_layout->setObjectName("action_buttons_layout");
+
+        horizontalLayout_3->addLayout(action_buttons_layout);
+
         horizontalSpacer = new QSpacerItem(40, 20, QSizePolicy::Policy::Expanding, QSizePolicy::Policy::Minimum);
 
         horizontalLayout_3->addItem(horizontalSpacer);
 
-        horizontalLayout_3->setStretch(10, 1);
 
         verticalLayout_2->addLayout(horizontalLayout_3);
 
